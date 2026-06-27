@@ -205,11 +205,11 @@ h1, h2, h3, .app-title {
   transform: none;
   display: flex;
   flex-direction: row;
-  flex-wrap: wrap;
+  flex-wrap: nowrap; /* Forced single row */
   align-items: center;
   justify-content: center;
-  padding: 8px 16px;
-  gap: 8px 6px;
+  padding: 6px 12px; /* More compact padding */
+  gap: 4px; /* Tighter gaps */
   width: 100%;
   box-sizing: border-box;
   background: #111116; /* Clean premium dark background */
@@ -581,6 +581,16 @@ h1, h2, h3, .app-title {
   box-shadow: 0 0 8px rgba(255, 255, 255, 0.5);
 }
 
+/* Outline for white color swatch to ensure visibility in light backgrounds */
+.color-swatch[data-color="#ffffff"] {
+  border: 1px solid rgba(0, 0, 0, 0.25) !important;
+}
+
+body.light-mode .color-swatch[data-color="#ffffff"].active {
+  border-color: var(--accent-color) !important;
+  box-shadow: 0 0 8px rgba(59, 130, 246, 0.5);
+}
+
 .dropdown-divider-h {
   height: 1px;
   background: rgba(255, 255, 255, 0.08);
@@ -862,14 +872,14 @@ h1, h2, h3, .app-title {
 
 /* Custom Text Input for Annotations */
 .text-annotation-input {
-  position: absolute;
-  background: transparent;
-  border: 1.5px dashed var(--accent-color);
-  outline: none;
-  font-family: inherit;
-  resize: both;
+   position: absolute;
+   background: transparent;
+   border: 1.5px dashed #000000;
+   outline: none;
+   font-family: inherit;
+  resize: none; /* Auto-expands dynamically instead */
   overflow: hidden;
-  padding: 4px;
+  padding: 1px 3px; /* Compact padding */
   z-index: 10;
   color: inherit;
 }
@@ -877,66 +887,133 @@ h1, h2, h3, .app-title {
 /* Laser Pointer */
 #laser-dot {
   position: fixed;
-  width: 14px;
-  height: 14px;
+  width: 8px;
+  height: 8px;
   background: #ff2a2a;
   border-radius: 50%;
   pointer-events: none;
   z-index: 9999;
   transform: translate(-50%, -50%);
-  box-shadow: 0 0 15px 6px rgba(255, 42, 42, 0.8), 0 0 30px 15px rgba(255, 42, 42, 0.35);
+  box-shadow: 0 0 8px 3px rgba(255, 42, 42, 0.8), 0 0 16px 8px rgba(255, 42, 42, 0.35);
 }
 
-/* Reveal Mode overlay with strong scrim (60%) */
-#global-reveal-overlay {
+/* Flashlight presentation mode overlay (blackout screen) */
+#global-flashlight-overlay {
   position: absolute;
   top: 0;
   left: 0;
   width: 100%;
   height: 100%;
-  pointer-events: none;
-  z-index: 50;
-  overflow: hidden;
+  pointer-events: auto; /* Catches mouse movements to track beam position */
+  z-index: 90; /* Sits on top of canvases, but below toolbar (100) */
+  background: rgba(8, 8, 12, 0.95);
+  cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="%2360a5fa" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 22V17.6569C15 16.8394 15 16.4306 15.1522 16.0631C15.3045 15.6955 15.5935 15.4065 16.1716 14.8284L19.4142 11.5858C19.7032 11.2968 19.8478 11.1522 19.9239 10.9685C20 10.7847 20 10.5803 20 10.1716V10C20 9.05719 20 8.58579 19.7071 8.29289C19.4142 8 18.9428 8 18 8H17M9 22V17.6569C9 16.8394 9 16.4306 8.84776 16.0631C8.69552 15.6955 8.40649 15.4065 7.82843 14.8284L4.58579 11.5858C4.29676 11.2968 4.15224 11.1522 4.07612 10.9685C4 10.7847 4 10.5803 4 10.1716V10C4 9.05719 4 8.58579 4.29289 8.29289C4.58579 8 5.05719 8 6 8H13"/><path d="M15 16H9"/><path d="M4.5 11H19.5"/><path d="M12 5V2"/><path d="M8 5L6 3"/><path d="M16 5L18 3"/><path d="M12 19V21"/></svg>') 12 2, none !important;
 }
 
-.reveal-curtain {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: rgba(8, 8, 12, 0.96);
-  backdrop-filter: blur(30px);
-  -webkit-backdrop-filter: blur(30px);
-  pointer-events: auto;
-  border-bottom: 2px solid rgba(255, 255, 255, 0.12);
-  box-shadow: 0 20px 60px rgba(0,0,0,0.95);
+#global-flashlight-overlay.flashlight-active {
+  cursor: none !important;
 }
 
-.reveal-handle {
+/* Sub-menu Color Popover for compact formatting panel */
+.panel-color-popover {
   position: absolute;
-  bottom: 0;
-  left: 50%;
-  transform: translate(-50%, 50%);
-  background: rgba(28, 28, 38, 0.92);
-  backdrop-filter: blur(10px);
+  z-index: 1002; /* Higher than the formatting panel (1001) */
+  background: #1e1e26;
   border: 1px solid rgba(255, 255, 255, 0.15);
-  color: var(--text-primary);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.6px;
-  text-transform: uppercase;
-  padding: 8px 24px;
-  border-radius: 20px;
-  cursor: ns-resize;
-  box-shadow: 0 6px 20px rgba(0,0,0,0.5);
-  transition: all 0.2s ease;
+  border-radius: 8px;
+  padding: 6px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 96px; /* Compact width fit for 3x2 grid */
+  pointer-events: auto;
+  box-sizing: border-box;
 }
 
-.reveal-handle:hover {
-  background: rgba(45, 45, 60, 0.95);
-  border-color: rgba(255, 255, 255, 0.25);
-  transform: translate(-50%, 50%) scale(1.05);
+body.light-mode .panel-color-popover {
+  background: #ffffff;
+  border: 1px solid rgba(0, 0, 0, 0.18);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+}
+
+.panel-color-popover-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+
+.panel-color-popover .popover-swatch {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1px solid transparent;
+  cursor: pointer;
+  padding: 0;
+  box-sizing: border-box;
+  transition: transform 0.15s ease;
+}
+
+.panel-color-popover .popover-swatch:hover {
+  transform: scale(1.15);
+}
+
+.panel-color-popover .popover-swatch.active {
+  border-color: var(--accent-color) !important;
+  box-shadow: 0 0 6px rgba(59, 130, 246, 0.4);
+}
+
+/* Outline white swatch */
+.panel-color-popover .popover-swatch[data-color="#ffffff"] {
+  border: 1px solid rgba(0, 0, 0, 0.25) !important;
+}
+
+.panel-color-popover .custom-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  padding-top: 5px;
+  margin-top: 2px;
+  box-sizing: border-box;
+}
+
+body.light-mode .panel-color-popover .custom-row {
+  border-top: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.panel-color-popover .custom-label {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.6);
+  font-weight: 600;
+  font-family: inherit;
+}
+
+body.light-mode .panel-color-popover .custom-label {
+  color: rgba(0, 0, 0, 0.6);
+}
+
+.panel-color-popover .custom-preview-btn {
+  position: relative;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  cursor: pointer;
+  background: linear-gradient(45deg, red, orange, yellow, green, blue, purple);
+  overflow: hidden;
+  transition: transform 0.15s ease;
+}
+
+.panel-color-popover .custom-preview-btn:hover {
+  transform: scale(1.15);
+}
+
+.panel-color-popover .custom-preview-btn input[type="color"] {
+  position: absolute;
+  opacity: 0;
+  width: 100%;
+  height: 100%;
+  cursor: pointer;
 }
 
 /* Scrollbar customizations */
@@ -948,11 +1025,15 @@ h1, h2, h3, .app-title {
   background: var(--bg-color);
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.22);
+  border: 1.5px solid transparent;
+  background-clip: padding-box;
   border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.38);
+  border: 1.5px solid transparent;
+  background-clip: padding-box;
 }
 
 /* Custom Eraser Cursor class */
@@ -963,7 +1044,7 @@ h1, h2, h3, .app-title {
 /* Page Indicator Vicinity Hover Zone */
 #page-indicator-zone {
   position: absolute;
-  bottom: 24px;
+  bottom: 44px; /* Repositioned to clear taskbar with a clean, minimal gap */
   left: 50%;
   transform: translateX(-50%);
   padding-bottom: 10px;
@@ -1107,6 +1188,10 @@ body.light-mode .indicator-btn:hover {
 
 .select-tool-active .drawing-canvas {
   cursor: grab !important;
+}
+
+.select-tool-active .drawing-canvas.hovering-annotation {
+  cursor: move !important;
 }
 
 body.grabbing, body.grabbing * {
@@ -1489,11 +1574,15 @@ body.light-mode ::-webkit-scrollbar-track {
 }
 
 body.light-mode ::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.12);
+  background: rgba(0, 0, 0, 0.26);
+  border: 1.5px solid transparent;
+  background-clip: padding-box;
 }
 
 body.light-mode ::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 0, 0, 0.22);
+  background: rgba(0, 0, 0, 0.42);
+  border: 1.5px solid transparent;
+  background-clip: padding-box;
 }
 
 body.light-mode .app-author {
@@ -1526,6 +1615,219 @@ body.light-mode .color-swatch.active {
   box-shadow: 0 0 8px rgba(0, 0, 0, 0.3);
 }
 
+/* Resize cursor overrides */
+.select-tool-active .drawing-canvas.cursor-nwse {
+  cursor: nwse-resize !important;
+}
+.select-tool-active .drawing-canvas.cursor-nesw {
+  cursor: nesw-resize !important;
+}
+.select-tool-active .drawing-canvas.cursor-crosshair {
+  cursor: crosshair !important;
+}
+.select-tool-active .drawing-canvas.cursor-move {
+  cursor: move !important;
+}
+
+/* Solid High-Contrast Connected Text Formatting Panel */
+.text-format-panel {
+  position: absolute;
+  z-index: 1001;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: #1e1e26; /* Solid dark background */
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  padding: 3px 5px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  pointer-events: auto;
+  user-select: none;
+}
+
+/* Connective Arrow pointing to the text box */
+.text-format-panel::after {
+  content: '';
+  position: absolute;
+  bottom: -5px;
+  left: 15px;
+  border-width: 5px 5px 0;
+  border-style: solid;
+  border-color: #1e1e26 transparent transparent;
+  display: block;
+  width: 0;
+}
+
+/* Border overlay for connective arrow to match panel border */
+.text-format-panel::before {
+  content: '';
+  position: absolute;
+  bottom: -6px;
+  left: 14px;
+  border-width: 6px 6px 0;
+  border-style: solid;
+  border-color: rgba(255, 255, 255, 0.15) transparent transparent;
+  display: block;
+  width: 0;
+  z-index: -1;
+}
+
+/* Flipped states if positioned below the text box */
+.text-format-panel.position-below::after {
+  bottom: auto;
+  top: -5px;
+  border-width: 0 5px 5px;
+  border-color: transparent transparent #1e1e26;
+}
+
+.text-format-panel.position-below::before {
+  bottom: auto;
+  top: -6px;
+  border-width: 0 6px 6px;
+  border-color: transparent transparent rgba(255, 255, 255, 0.15);
+}
+
+.text-format-panel .panel-btn {
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.8);
+  border-radius: 4px;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  padding: 0;
+}
+
+.text-format-panel .panel-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+  transform: translateY(-1px);
+}
+
+.text-format-panel .panel-btn:active {
+  transform: translateY(0);
+}
+
+body.light-mode .text-format-panel {
+  background: #ffffff; /* Solid light background */
+  border: 1px solid rgba(0, 0, 0, 0.18);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+}
+
+body.light-mode .text-format-panel::after {
+  border-color: #ffffff transparent transparent;
+}
+
+body.light-mode .text-format-panel::before {
+  border-color: rgba(0, 0, 0, 0.18) transparent transparent;
+}
+
+body.light-mode .text-format-panel.position-below::after {
+  border-color: transparent transparent #ffffff;
+}
+
+body.light-mode .text-format-panel.position-below::before {
+  border-color: transparent transparent rgba(0, 0, 0, 0.18);
+}
+
+body.light-mode .text-format-panel .panel-btn {
+  color: rgba(0, 0, 0, 0.7);
+}
+
+body.light-mode .text-format-panel .panel-btn:hover {
+  background: rgba(0, 0, 0, 0.05);
+  color: #000000;
+}
+
+.text-format-panel .panel-btn.active {
+  background: var(--accent-color);
+  color: #ffffff !important;
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+}
+
+.text-format-panel .panel-label {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.6);
+  min-width: 28px;
+  text-align: center;
+  font-family: inherit;
+  font-weight: 600;
+}
+
+body.light-mode .text-format-panel .panel-label {
+  color: rgba(0, 0, 0, 0.5);
+}
+
+.text-format-panel .panel-divider {
+  width: 1px;
+  height: 14px;
+  background: rgba(255, 255, 255, 0.15);
+  margin: 0 2px;
+}
+
+body.light-mode .text-format-panel .panel-divider {
+  background: rgba(0, 0, 0, 0.12);
+}
+
+.text-format-panel input[type="color"] {
+  border: none;
+  background: transparent;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  cursor: pointer;
+  border-radius: 50%;
+  overflow: hidden;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.2);
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+body.light-mode .text-format-panel input[type="color"] {
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.15);
+}
+
+.text-format-panel input[type="color"]:hover {
+  transform: scale(1.15);
+}
+
+.text-format-panel input[type="color"]::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.text-format-panel input[type="color"]::-webkit-color-swatch {
+  border: none;
+  border-radius: 50%;
+}
+
+.text-format-panel .delete-btn {
+  color: #ef4444;
+}
+
+.text-format-panel .delete-btn:hover {
+  background: rgba(239, 68, 68, 0.12) !important;
+  color: #ef4444 !important;
+  box-shadow: none;
+}
+
+.text-format-panel .panel-btn svg {
+  width: 14px;
+  height: 14px;
+  stroke-width: 2.25;
+}
+
 body.light-mode .tab .tab-unsaved {
   color: #dc2626; /* High contrast red/orange in light mode */
+}
+
+/* Custom Cursors for Pen and Highlighter */
+.pen-cursor {
+  cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="%2360a5fa" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>') 3 20, crosshair !important;
+}
+
+.highlighter-cursor {
+  cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="%23f59e0b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 3-3-3L5 13l3 3Z"/><path d="M5 13 L2 16 L3.5 19.5 L8 16"/><path d="m11 9-3-3"/></svg>') 2 16, crosshair !important;
 }

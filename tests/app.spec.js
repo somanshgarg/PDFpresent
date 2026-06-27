@@ -129,7 +129,7 @@ test.describe('PDFpresent Deep Integration & Quality Tests', () => {
     await expect(selectTool).toHaveClass(/active/);
 
     // 2. Freehand drawing tools
-    const tools = ['pen', 'highlighter', 'eraser'];
+    const tools = ['pen', 'highlighter', 'eraser', 'text'];
     for (const tool of tools) {
       const btn = page.locator(`[data-tool="${tool}"]`);
       await btn.click();
@@ -138,7 +138,7 @@ test.describe('PDFpresent Deep Integration & Quality Tests', () => {
     }
 
     // 3. Shape tools
-    const shapes = ['box', 'circle', 'line', 'arrow', 'text'];
+    const shapes = ['box', 'circle', 'line', 'arrow'];
     const shapesArrow = page.locator('#btn-shape-arrow');
     for (const shape of shapes) {
       await shapesArrow.click();
@@ -369,10 +369,12 @@ test.describe('PDFpresent Deep Integration & Quality Tests', () => {
 
     // Hover main part of split button
     await shapeSelect.hover();
+    await page.waitForTimeout(250);
     const mainHoverBg = await shapeSelect.evaluate(el => window.getComputedStyle(el).backgroundColor);
 
     // Hover arrow part
     await shapeArrow.hover();
+    await page.waitForTimeout(250);
     const arrowHoverBg = await shapeArrow.evaluate(el => window.getComputedStyle(el).backgroundColor);
 
     // Verify hover styles are active (background differs from default or transparent)
@@ -399,9 +401,9 @@ test.describe('PDFpresent Deep Integration & Quality Tests', () => {
     const redSwatch = page.locator('.color-swatch[data-color="#ef4444"]');
     await redSwatch.click();
     
-    // Verify tool auto-switches to Pen
-    const penBtn = page.locator('[data-tool="pen"]');
-    await expect(penBtn).toHaveClass(/active/);
+    // Verify tool does not reset (remains highlighter)
+    const highlighterBtn = page.locator('[data-tool="highlighter"]');
+    await expect(highlighterBtn).toHaveClass(/active/);
     
     // Open thickness dropdown
     const thicknessArrow = page.locator('#btn-thickness-arrow');
@@ -460,40 +462,29 @@ test.describe('PDFpresent Deep Integration & Quality Tests', () => {
     await expect(penBtn).toHaveClass(/active/);
   });
 
-  test('12. Verify reveal curtain arrow navigation and vicinity-aware page indicator', async () => {
+  test('12. Verify flashlight spotlight and vicinity-aware page indicator', async () => {
     // Open document first
     await page.click('#btn-open');
     const firstPage = page.locator('.page-container[data-page="1"]');
     await expect(firstPage).toBeVisible({ timeout: 10000 });
 
-    // Test Reveal Curtain
-    const revealBtn = page.locator('#btn-reveal');
-    await revealBtn.click();
+    // Test Flashlight Spotlight
+    const flashlightBtn = page.locator('#btn-flashlight');
+    await flashlightBtn.click();
 
-    const curtainOverlay = page.locator('#global-reveal-overlay');
-    await expect(curtainOverlay).toBeVisible();
+    const flashlightOverlay = page.locator('#global-flashlight-overlay');
+    await expect(flashlightOverlay).toBeVisible();
 
-    const handle = page.locator('.reveal-handle');
-    await handle.focus();
-
-    await page.keyboard.press('ArrowDown');
-    const valBefore = await handle.getAttribute('aria-valuenow');
-    
-    await page.keyboard.press('ArrowDown');
-    const valAfter = await handle.getAttribute('aria-valuenow');
-    
-    expect(parseInt(valAfter)).toBeGreaterThan(parseInt(valBefore));
-
-    // Disable curtain
-    await revealBtn.click();
-    await expect(curtainOverlay).toBeHidden();
+    // Disable flashlight
+    await flashlightBtn.click();
+    await expect(flashlightOverlay).toBeHidden();
 
     // Test Vicinity Page Indicator
     const indicator = page.locator('#page-indicator');
     const hoverZone = page.locator('#page-indicator-zone');
     
     // Hover vicinity zone to slide up
-    await hoverZone.hover();
+    await hoverZone.hover({ force: true });
     await page.waitForTimeout(300); // Wait for transition animation
     const hoveredOpacity = await indicator.evaluate(el => window.getComputedStyle(el).opacity);
     expect(parseFloat(hoveredOpacity)).toBeCloseTo(1.0, 1);

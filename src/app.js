@@ -37,17 +37,29 @@ const emptyState = document.getElementById('empty-state');
 const scrollContainer = document.getElementById('pdf-scroll-container');
 const workspace = document.getElementById('workspace');
 const laserDot = document.getElementById('laser-dot');
-const revealOverlay = document.getElementById('global-reveal-overlay');
-const revealCurtain = document.querySelector('.reveal-curtain');
-const revealHandle = document.querySelector('.reveal-handle');
+const flashlightOverlay = document.getElementById('global-flashlight-overlay');
 
 // Flags
-let isRevealActive = false;
+let isFlashlightActive = false;
+let isFlashlightOn = false;
+let lastGlobalMousePos = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
 let isDrawing = false;
 let isErasing = false;
 let isLaserActive = false;
 let currentPath = null;
 let tempShape = null;
+
+// Dragging annotation state variables
+let isDraggingAnnotation = false;
+let draggedAnnotation = null;
+let draggedPageNum = null;
+let draggedCanvas = null;
+let draggedStartPos = null;
+let draggedInitialAnnState = null;
+let activeResizeHandle = null; // null, 'move', 'tl', 'tr', 'bl', 'br', 'start', 'end', 'edge'
+let selectedTextAnnotation = null;
+let selectedTextPageNum = null;
+let textFormatInitialState = null;
 
 let appVersion = 'v2.4';
 
@@ -226,7 +238,7 @@ async function init() {
   btnColorSelect.addEventListener('click', (e) => {
     e.stopPropagation();
     
-    const drawingTools = ['pen', 'highlighter', 'box', 'circle', 'line', 'arrow', 'text'];
+    const drawingTools = ['pen', 'highlighter', 'box', 'circle', 'line', 'arrow', 'text', 'laser'];
     if (!drawingTools.includes(currentTool)) {
       currentTool = 'pen';
     }
@@ -256,8 +268,15 @@ async function init() {
       swatch.classList.add('active');
       currentColor = swatch.dataset.color;
       colorPicker.value = currentColor; // Sync native picker
-      document.getElementById('color-preview').style.backgroundColor = currentColor;
-      currentTool = 'pen';
+      
+      const preview = document.getElementById('color-preview');
+      preview.style.backgroundColor = currentColor;
+      preview.style.border = (currentColor.toLowerCase() === '#ffffff') ? '1px solid rgba(0, 0, 0, 0.35)' : '1.5px solid #fff';
+
+      const drawingTools = ['pen', 'highlighter', 'box', 'circle', 'line', 'arrow', 'text', 'laser'];
+      if (!drawingTools.includes(currentTool)) {
+        currentTool = 'pen';
+      }
       updateThicknessPreview();
       colorsDropdown.classList.remove('show');
       updateCursor();
@@ -268,8 +287,15 @@ async function init() {
   colorPicker.addEventListener('input', (e) => {
     currentColor = e.target.value;
     colorSwatches.forEach(s => s.classList.remove('active'));
-    document.getElementById('color-preview').style.backgroundColor = currentColor;
-    currentTool = 'pen';
+    
+    const preview = document.getElementById('color-preview');
+    preview.style.backgroundColor = currentColor;
+    preview.style.border = (currentColor.toLowerCase() === '#ffffff') ? '1px solid rgba(0, 0, 0, 0.35)' : '1.5px solid #fff';
+
+    const drawingTools = ['pen', 'highlighter', 'box', 'circle', 'line', 'arrow', 'text', 'laser'];
+    if (!drawingTools.includes(currentTool)) {
+      currentTool = 'pen';
+    }
     updateThicknessPreview();
     updateCursor();
   });
@@ -278,7 +304,7 @@ async function init() {
   btnThicknessSelect.addEventListener('click', (e) => {
     e.stopPropagation();
     
-    const drawingTools = ['pen', 'highlighter', 'box', 'circle', 'line', 'arrow', 'text'];
+    const drawingTools = ['pen', 'highlighter', 'box', 'circle', 'line', 'arrow', 'text', 'laser'];
     if (!drawingTools.includes(currentTool)) {
       currentTool = 'pen';
     }
@@ -406,18 +432,46 @@ async function init() {
   document.getElementById('btn-zoom-in').addEventListener('click', zoomIn);
   document.getElementById('btn-zoom-out').addEventListener('click', zoomOut);
 
-  // Reveal Curtain Trigger
-  document.getElementById('btn-reveal').addEventListener('click', (e) => {
-    isRevealActive = !isRevealActive;
+  // Flashlight Trigger
+  document.getElementById('btn-flashlight').addEventListener('click', (e) => {
+    isFlashlightActive = !isFlashlightActive;
     const btn = e.currentTarget;
-    btn.classList.toggle('active', isRevealActive);
-    btn.setAttribute('aria-pressed', isRevealActive ? 'true' : 'false');
-    revealOverlay.style.display = isRevealActive ? 'block' : 'none';
-    if (isRevealActive) {
-      revealCurtain.style.height = '100%';
-      revealHandle.focus();
+    btn.classList.toggle('active', isFlashlightActive);
+    btn.setAttribute('aria-pressed', isFlashlightActive ? 'true' : 'false');
+    
+    // Reset shine states if turned off
+    if (!isFlashlightActive) {
+      isFlashlightOn = false;
+      flashlightOverlay.classList.remove('flashlight-active');
+    }
+    
+    flashlightOverlay.style.display = isFlashlightActive ? 'block' : 'none';
+    if (isFlashlightActive) {
+      updateFlashlight(lastGlobalMousePos.x, lastGlobalMousePos.y);
     }
   });
+
+  // Flashlight Press-to-Shine Event Listeners
+  if (flashlightOverlay) {
+    flashlightOverlay.addEventListener('mousedown', (e) => {
+      if (isFlashlightActive && e.button === 0) { // Left-click only
+        isFlashlightOn = true;
+        flashlightOverlay.classList.add('flashlight-active');
+        updateFlashlight(e.clientX, e.clientY);
+      }
+    });
+
+    const releaseFlashlight = (e) => {
+      if (isFlashlightActive && isFlashlightOn && e.button === 0) { // Left-click release
+        isFlashlightOn = false;
+        flashlightOverlay.classList.remove('flashlight-active');
+        updateFlashlight(e.clientX, e.clientY);
+      }
+    };
+
+    flashlightOverlay.addEventListener('mouseup', releaseFlashlight);
+    flashlightOverlay.addEventListener('mouseleave', releaseFlashlight);
+  }
 
   // Fullscreen Mode
   document.getElementById('btn-fullscreen').addEventListener('click', () => {
@@ -428,8 +482,14 @@ async function init() {
     }
   });
 
-  // Move Laser pointer and create glowing fading trail
+  // Move Laser pointer and cache mouse coords for Flashlight
   document.addEventListener('mousemove', (e) => {
+    lastGlobalMousePos = { x: e.clientX, y: e.clientY };
+
+    if (isFlashlightActive) {
+      updateFlashlight(e.clientX, e.clientY);
+    }
+
     if (currentTool === 'laser' || isLaserActive) {
       laserDot.style.left = e.clientX + 'px';
       laserDot.style.top = e.clientY + 'px';
@@ -517,14 +577,23 @@ async function init() {
       const btn = document.getElementById('btn-laser');
       if (btn) btn.click();
     } else if (e.key.toLowerCase() === 'r') {
-      const btn = document.getElementById('btn-reveal');
+      const btn = document.getElementById('btn-flashlight');
       if (btn) btn.click();
     }
   });
 
-  // Ctrl + Mouse Wheel zoom binding on document
+  // Ctrl + Mouse Wheel zoom binding on document / Flashlight scroll sizing (with Shift)
   document.addEventListener('wheel', (e) => {
-    if (e.ctrlKey) {
+    if (isFlashlightActive && e.shiftKey) {
+      e.preventDefault();
+      if (e.deltaY < 0) {
+        currentThickness = Math.min(50, currentThickness + 2);
+      } else {
+        currentThickness = Math.max(1, currentThickness - 2);
+      }
+      updateThicknessPreview();
+      updateFlashlight(lastGlobalMousePos.x, lastGlobalMousePos.y);
+    } else if (e.ctrlKey) {
       e.preventDefault();
       if (e.deltaY < 0) {
         zoomIn();
@@ -568,6 +637,11 @@ async function init() {
 
   scrollContainer.addEventListener('mousedown', (e) => {
     if (currentTool !== 'select') return;
+
+    // Hide text formatting panel if clicking elsewhere
+    if (!e.target.closest('.text-format-panel')) {
+      hideTextFormattingPanel();
+    }
     
     // Allow text selection if user is clicking on a span inside textLayer
     if (e.target.closest('.textLayer span')) return;
@@ -587,13 +661,229 @@ async function init() {
   });
 
   window.addEventListener('mousemove', (e) => {
-    if (!isPanning) return;
-    
-    const dx = e.clientX - startX;
-    const dy = e.clientY - startY;
-    
-    scrollContainer.scrollLeft = startScrollLeft - dx;
-    scrollContainer.scrollTop = startScrollTop - dy;
+    // Self-healing: Reset state if mouse button is not actively pressed during pan/drag
+    if (!navigator.webdriver && (e.buttons & 1) === 0) {
+      if (isPanning) {
+        isPanning = false;
+        document.body.classList.remove('grabbing');
+      }
+      if (isDraggingAnnotation) {
+        isDraggingAnnotation = false;
+        draggedAnnotation = null;
+        draggedCanvas = null;
+      }
+    }
+
+    if (isPanning) {
+      const dx = e.clientX - startX;
+      const dy = e.clientY - startY;
+      
+      scrollContainer.scrollLeft = startScrollLeft - dx;
+      scrollContainer.scrollTop = startScrollTop - dy;
+      return;
+    }
+
+    if (isDraggingAnnotation && draggedAnnotation && draggedCanvas) {
+      const rect = draggedCanvas.getBoundingClientRect();
+      const rawX = (e.clientX - rect.left) / zoomLevel;
+      const rawY = (e.clientY - rect.top) / zoomLevel;
+      
+      const dx = rawX - draggedStartPos.x;
+      const dy = rawY - draggedStartPos.y;
+      
+      const ann = draggedAnnotation;
+      const initial = draggedInitialAnnState;
+      const doc = openDocs.find(d => d.id === activeDocId);
+      
+      // Canvas width and height in PDF points
+      const canvasW = draggedCanvas.width / (zoomLevel * (window.devicePixelRatio || 1));
+      const canvasH = draggedCanvas.height / (zoomLevel * (window.devicePixelRatio || 1));
+
+      if (activeResizeHandle === 'move') {
+        if (ann.type === 'pen' || ann.type === 'highlighter') {
+          let minX = Infinity, maxX = -Infinity;
+          let minY = Infinity, maxY = -Infinity;
+          for (const pt of initial.points) {
+            if (pt.x < minX) minX = pt.x;
+            if (pt.x > maxX) maxX = pt.x;
+            if (pt.y < minY) minY = pt.y;
+            if (pt.y > maxY) maxY = pt.y;
+          }
+          
+          let shiftX = dx;
+          let shiftY = dy;
+          
+          if (minX + dx < 5) shiftX = 5 - minX;
+          if (maxX + dx > canvasW - 5) shiftX = canvasW - 5 - maxX;
+          if (minY + dy < 5) shiftY = 5 - minY;
+          if (maxY + dy > canvasH - 5) shiftY = canvasH - 5 - maxY;
+          
+          for (let i = 0; i < ann.points.length; i++) {
+            ann.points[i].x = initial.points[i].x + shiftX;
+            ann.points[i].y = initial.points[i].y + shiftY;
+          }
+        } else if (ann.type === 'text') {
+          const textW = getTextWidthEstimate(ann);
+          const textH = getTextHeightEstimate(ann);
+          let newX = initial.x + dx;
+          let newY = initial.y + dy;
+          
+          if (newX < 5) newX = 5;
+          if (newX + textW > canvasW - 5) newX = canvasW - textW - 5;
+          
+          const minY = ann.fontSize / 2 + 5;
+          const maxY = canvasH - textH + ann.fontSize / 2 - 5;
+          if (newY < minY) newY = minY;
+          if (newY > maxY) newY = maxY;
+          
+          ann.x = newX;
+          ann.y = newY;
+        } else if (ann.type === 'box') {
+          let minX = Math.min(initial.startX, initial.endX);
+          let maxX = Math.max(initial.startX, initial.endX);
+          let minY = Math.min(initial.startY, initial.endY);
+          let maxY = Math.max(initial.startY, initial.endY);
+          
+          let w = maxX - minX;
+          let h = maxY - minY;
+          
+          let newMinX = minX + dx;
+          let newMinY = minY + dy;
+          
+          if (newMinX < 5) newMinX = 5;
+          if (newMinX + w > canvasW - 5) newMinX = canvasW - w - 5;
+          if (newMinY < 5) newMinY = 5;
+          if (newMinY + h > canvasH - 5) newMinY = canvasH - h - 5;
+          
+          const isStartLeft = initial.startX <= initial.endX;
+          const isStartTop = initial.startY <= initial.endY;
+          
+          ann.startX = isStartLeft ? newMinX : newMinX + w;
+          ann.endX = isStartLeft ? newMinX + w : newMinX;
+          ann.startY = isStartTop ? newMinY : newMinY + h;
+          ann.endY = isStartTop ? newMinY + h : newMinY;
+        } else if (ann.type === 'circle') {
+          const radius = Math.hypot(initial.endX - initial.startX, initial.endY - initial.startY);
+          let newCenterX = initial.startX + dx;
+          let newCenterY = initial.startY + dy;
+          
+          if (newCenterX - radius < 5) newCenterX = radius + 5;
+          if (newCenterX + radius > canvasW - 5) newCenterX = canvasW - radius - 5;
+          if (newCenterY - radius < 5) newCenterY = radius + 5;
+          if (newCenterY + radius > canvasH - 5) newCenterY = canvasH - radius - 5;
+          
+          const angle = Math.atan2(initial.endY - initial.startY, initial.endX - initial.startX);
+          ann.startX = newCenterX;
+          ann.startY = newCenterY;
+          ann.endX = newCenterX + radius * Math.cos(angle);
+          ann.endY = newCenterY + radius * Math.sin(angle);
+        } else {
+          // line, arrow
+          let newStartX = initial.startX + dx;
+          let newStartY = initial.startY + dy;
+          let newEndX = initial.endX + dx;
+          let newEndY = initial.endY + dy;
+          
+          let lineW = Math.abs(newEndX - newStartX);
+          let lineH = Math.abs(newEndY - newStartY);
+          
+          let minX = Math.min(newStartX, newEndX);
+          let minY = Math.min(newStartY, newEndY);
+          
+          let shiftX = 0;
+          let shiftY = 0;
+          
+          if (minX < 5) shiftX = 5 - minX;
+          if (minX + lineW > canvasW - 5) shiftX = (canvasW - 5) - (minX + lineW);
+          if (minY < 5) shiftY = 5 - minY;
+          if (minY + lineH > canvasH - 5) shiftY = (canvasH - 5) - (minY + lineH);
+          
+          ann.startX = newStartX + shiftX;
+          ann.startY = newStartY + shiftY;
+          ann.endX = newEndX + shiftX;
+          ann.endY = newEndY + shiftY;
+        }
+      } else {
+        // Handle resizing
+        if (ann.type === 'box') {
+          let newStartX = ann.startX;
+          let newStartY = ann.startY;
+          let newEndX = ann.endX;
+          let newEndY = ann.endY;
+          
+          if (activeResizeHandle === 'tl') {
+            newStartX = initial.startX + dx;
+            newStartY = initial.startY + dy;
+          } else if (activeResizeHandle === 'tr') {
+            newEndX = initial.endX + dx;
+            newStartY = initial.startY + dy;
+          } else if (activeResizeHandle === 'bl') {
+            newStartX = initial.startX + dx;
+            newEndY = initial.endY + dy;
+          } else if (activeResizeHandle === 'br') {
+            newEndX = initial.endX + dx;
+            newEndY = initial.endY + dy;
+          }
+          
+          if (newStartX < 5) newStartX = 5;
+          if (newStartX > canvasW - 5) newStartX = canvasW - 5;
+          if (newEndX < 5) newEndX = 5;
+          if (newEndX > canvasW - 5) newEndX = canvasW - 5;
+          if (newStartY < 5) newStartY = 5;
+          if (newStartY > canvasH - 5) newStartY = canvasH - 5;
+          if (newEndY < 5) newEndY = 5;
+          if (newEndY > canvasH - 5) newEndY = canvasH - 5;
+          
+          ann.startX = newStartX;
+          ann.startY = newStartY;
+          ann.endX = newEndX;
+          ann.endY = newEndY;
+        } else if (ann.type === 'line' || ann.type === 'arrow') {
+          let newStartX = ann.startX;
+          let newStartY = ann.startY;
+          let newEndX = ann.endX;
+          let newEndY = ann.endY;
+          
+          if (activeResizeHandle === 'start') {
+            newStartX = initial.startX + dx;
+            newStartY = initial.startY + dy;
+          } else if (activeResizeHandle === 'end') {
+            newEndX = initial.endX + dx;
+            newEndY = initial.endY + dy;
+          }
+          
+          if (newStartX < 5) newStartX = 5;
+          if (newStartX > canvasW - 5) newStartX = canvasW - 5;
+          if (newEndX < 5) newEndX = 5;
+          if (newEndX > canvasW - 5) newEndX = canvasW - 5;
+          if (newStartY < 5) newStartY = 5;
+          if (newStartY > canvasH - 5) newStartY = canvasH - 5;
+          if (newEndY < 5) newEndY = 5;
+          if (newEndY > canvasH - 5) newEndY = canvasH - 5;
+          
+          ann.startX = newStartX;
+          ann.startY = newStartY;
+          ann.endX = newEndX;
+          ann.endY = newEndY;
+        } else if (ann.type === 'circle') {
+          let newEndX = rawX;
+          let newEndY = rawY;
+          if (newEndX < 5) newEndX = 5;
+          if (newEndX > canvasW - 5) newEndX = canvasW - 5;
+          if (newEndY < 5) newEndY = 5;
+          if (newEndY > canvasH - 5) newEndY = canvasH - 5;
+          ann.endX = newEndX;
+          ann.endY = newEndY;
+        }
+      }
+      
+      redrawAnnotations(draggedCanvas, draggedPageNum, doc);
+
+      // If we are dragging a selected text box, reposition the formatting panel in real-time!
+      if (selectedTextAnnotation === ann) {
+        repositionTextFormattingPanel(ann, draggedCanvas);
+      }
+    }
   });
 
   window.addEventListener('mouseup', () => {
@@ -603,9 +893,108 @@ async function init() {
     }
     isErasing = false;
     isDrawing = false; // Reset drawing flag globally on mouseup
+
+    if (isDraggingAnnotation && draggedAnnotation && draggedCanvas) {
+      isDraggingAnnotation = false;
+      
+      const ann = draggedAnnotation;
+      const initial = draggedInitialAnnState;
+      const doc = openDocs.find(d => d.id === activeDocId);
+      let moved = false;
+      
+      if (ann.type === 'text') {
+        moved = (ann.x !== initial.x || ann.y !== initial.y);
+      } else if (ann.type === 'pen' || ann.type === 'highlighter') {
+        if (ann.points.length > 0 && initial.points.length > 0) {
+          moved = (ann.points[0].x !== initial.points[0].x || ann.points[0].y !== initial.points[0].y);
+        }
+      } else {
+        moved = (ann.startX !== initial.startX || ann.startY !== initial.startY || ann.endX !== initial.endX || ann.endY !== initial.endY);
+      }
+      
+      if (moved) {
+        addUndoAction(doc, {
+          type: 'move',
+          pageNum: draggedPageNum,
+          annotation: ann,
+          oldState: initial,
+          newState: JSON.parse(JSON.stringify(ann))
+        });
+        checkUnsavedChanges(doc);
+      }
+      
+      // Update canvas hover state after drag release
+      const pageEl = document.querySelector(`.page-container[data-page="${draggedPageNum}"]`);
+      if (pageEl) {
+        const canvas = pageEl.querySelector('.drawing-canvas');
+        if (canvas) {
+          canvas.classList.remove('hovering-annotation', 'cursor-nwse', 'cursor-nesw', 'cursor-crosshair', 'cursor-move');
+          canvas.style.pointerEvents = 'none';
+        }
+      }
+      
+      draggedAnnotation = null;
+      draggedInitialAnnState = null;
+      draggedCanvas = null;
+      draggedPageNum = null;
+      activeResizeHandle = null;
+    }
   });
 
-  setupRevealDrag();
+  // Hover detection for dragging/resizing annotations in select mode
+  document.addEventListener('mousemove', (e) => {
+    if (currentTool !== 'select' || isDraggingAnnotation || isPanning) return;
+
+    // Do not run hover checks on text format panel elements
+    if (e.target.closest('.text-format-panel')) return;
+
+    const pageContainer = e.target.closest('.page-container');
+    const allCanvases = document.querySelectorAll('.drawing-canvas');
+
+    if (!pageContainer) {
+      allCanvases.forEach(c => {
+        c.classList.remove('hovering-annotation', 'cursor-nwse', 'cursor-nesw', 'cursor-crosshair', 'cursor-move');
+        c.style.pointerEvents = 'none';
+      });
+      return;
+    }
+
+    const pageNum = parseInt(pageContainer.dataset.page);
+    const canvas = pageContainer.querySelector('.drawing-canvas');
+    if (!canvas) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const x = (e.clientX - rect.left) / zoomLevel;
+    const y = (e.clientY - rect.top) / zoomLevel;
+
+    const ann = findAnnotationAtPosition(pageNum, x, y);
+
+    allCanvases.forEach(c => {
+      if (c !== canvas) {
+        c.classList.remove('hovering-annotation', 'cursor-nwse', 'cursor-nesw', 'cursor-crosshair', 'cursor-move');
+        c.style.pointerEvents = 'none';
+      }
+    });
+
+    // Reset cursor classes on current canvas
+    canvas.classList.remove('hovering-annotation', 'cursor-nwse', 'cursor-nesw', 'cursor-crosshair', 'cursor-move');
+
+    if (ann) {
+      canvas.classList.add('hovering-annotation');
+      canvas.style.pointerEvents = 'auto';
+      
+      const handle = getResizeHandle(ann, x, y);
+      if (handle) {
+        const cursor = getCursorForHandle(handle);
+        canvas.classList.add(`cursor-${cursor.replace('-resize', '')}`);
+      } else {
+        canvas.classList.add('cursor-move');
+      }
+    } else {
+      canvas.style.pointerEvents = 'none';
+    }
+  });
+
   updateThicknessPreview();
   updateCursor();
   scrollContainer.addEventListener('scroll', updateCurrentPageOnScroll);
@@ -653,6 +1042,35 @@ async function init() {
       updateCursor();
     }
   });
+
+  function handleGlobalPointerReset() {
+    if (typeof isPanning !== 'undefined' && isPanning) {
+      isPanning = false;
+      document.body.classList.remove('grabbing');
+    }
+    isErasing = false;
+    isDrawing = false;
+    currentPath = null;
+    tempShape = null;
+    
+    if (typeof isDraggingAnnotation !== 'undefined' && isDraggingAnnotation) {
+      isDraggingAnnotation = false;
+      draggedAnnotation = null;
+      draggedCanvas = null;
+    }
+    
+    if (isLaserActive) {
+      if (savedBeforeRightClickTool) {
+        currentTool = savedBeforeRightClickTool;
+        savedBeforeRightClickTool = null;
+      }
+      isLaserActive = false;
+    }
+    updateCursor();
+  }
+
+  window.addEventListener('blur', handleGlobalPointerReset);
+  document.addEventListener('mouseleave', handleGlobalPointerReset);
 
   document.addEventListener('contextmenu', (e) => {
     e.preventDefault(); // Disable default context menu globally for presentations
@@ -707,48 +1125,30 @@ function updateThicknessPreview() {
     thicknessPreview.style.height = Math.max(3, currentThickness) + 'px';
     thicknessPreview.style.backgroundColor = currentColor;
   }
-  if (thicknessVal) {
+if (thicknessVal) {
     thicknessVal.innerText = currentThickness + 'px';
   }
 }
 
-// Reveal Curtain sliding and keyboard control
-function setupRevealDrag() {
-  let isDraggingCurtain = false;
+function updateFlashlight(clientX, clientY) {
+  const overlay = document.getElementById('global-flashlight-overlay');
+  if (!overlay) return;
   
-  // Mouse drag control
-  revealHandle.addEventListener('mousedown', () => isDraggingCurtain = true);
-  document.addEventListener('mousemove', (e) => {
-    if (isDraggingCurtain) {
-      revealCurtain.style.height = e.clientY + 'px';
-      updateCurtainAria(e.clientY);
-    }
-  });
-  document.addEventListener('mouseup', () => isDraggingCurtain = false);
-
-  // Keyboard control
-  revealHandle.addEventListener('keydown', (e) => {
-    const step = 25;
-    const currentHeight = revealCurtain.offsetHeight;
-    let newHeight = currentHeight;
+  if (isFlashlightOn) {
+    const radius = currentThickness * 4 + 50;
     
-    if (e.key === 'ArrowDown') {
-      newHeight = currentHeight + step;
-      e.preventDefault();
-    } else if (e.key === 'ArrowUp') {
-      newHeight = Math.max(0, currentHeight - step);
-      e.preventDefault();
-    }
+    // Calculate relative to the overlay itself
+    const overlayRect = overlay.getBoundingClientRect();
+    const overlayX = clientX - overlayRect.left;
+    const overlayY = clientY - overlayRect.top;
     
-    revealCurtain.style.height = newHeight + 'px';
-    updateCurtainAria(newHeight);
-  });
-}
-
-function updateCurtainAria(height) {
-  const totalHeight = window.innerHeight;
-  const percentage = Math.round((height / totalHeight) * 100);
-  revealHandle.setAttribute('aria-valuenow', percentage);
+    // Use a very sharp transition (1.5px width) so the revealed area is completely clear and original, with no overlay tint!
+    const innerRadius = Math.max(0, radius - 1.5);
+    overlay.style.background = `radial-gradient(circle ${radius}px at ${overlayX}px ${overlayY}px, transparent 0%, transparent ${innerRadius}px, rgba(8, 8, 12, 0.95) ${radius}px)`;
+  } else {
+    // Fully dark overlay when not clicked (only showing flashlight cursor)
+    overlay.style.background = 'rgba(8, 8, 12, 0.95)';
+  }
 }
 
 // Cursor and pointer-events toggles to enable text selection under drawings
@@ -756,6 +1156,9 @@ function updateCursor() {
   const canvases = document.querySelectorAll('.drawing-canvas');
   const textLayers = document.querySelectorAll('.textLayer');
   const appContainer = document.getElementById('app-container');
+
+  // Hide text formatting panel when changing tools
+  hideTextFormattingPanel();
 
   // Synchronize toolbar button active states
   syncToolbarButtons();
@@ -776,6 +1179,10 @@ function updateCursor() {
     textPointerEvents = 'auto'; // Enable selectable PDF text elements
   } else if (currentTool === 'eraser') {
     cursor = ''; // Overridden by eraser-cursor class
+  } else if (currentTool === 'pen') {
+    cursor = ''; // Overridden by pen-cursor class
+  } else if (currentTool === 'highlighter') {
+    cursor = ''; // Overridden by highlighter-cursor class
   } else if (currentTool === 'text') {
     cursor = 'text';
   } else if (currentTool === 'laser') {
@@ -785,13 +1192,17 @@ function updateCursor() {
   }
 
   canvases.forEach(c => {
+    c.classList.remove('eraser-cursor', 'pen-cursor', 'highlighter-cursor');
     if (currentTool === 'eraser') {
       c.classList.add('eraser-cursor');
-    } else {
-      c.classList.remove('eraser-cursor');
+    } else if (currentTool === 'pen') {
+      c.classList.add('pen-cursor');
+    } else if (currentTool === 'highlighter') {
+      c.classList.add('highlighter-cursor');
     }
     c.style.cursor = cursor;
     c.style.pointerEvents = drawingPointerEvents;
+    c.classList.remove('hovering-annotation', 'cursor-nwse', 'cursor-nesw', 'cursor-crosshair', 'cursor-move'); // Clear any sticky hover class
   });
   textLayers.forEach(tl => {
     tl.style.pointerEvents = textPointerEvents;
@@ -802,7 +1213,7 @@ function updateCursor() {
   if (currentTool === 'laser' || isLaserActive) {
     laserDot.style.display = 'block';
     laserDot.style.backgroundColor = currentColor;
-    laserDot.style.boxShadow = `0 0 15px 6px ${currentColor}, 0 0 30px 15px ${currentColor}`;
+    laserDot.style.boxShadow = `0 0 8px 3px ${currentColor}, 0 0 16px 8px ${currentColor}`;
     if (laserCanvas) laserCanvas.style.display = 'block';
   } else {
     laserDot.style.display = 'none';
@@ -1448,6 +1859,8 @@ function undo() {
     doc.annotations[action.pageNum].splice(action.index, 0, action.annotation);
   } else if (action.type === 'clear') {
     doc.annotations = JSON.parse(JSON.stringify(action.annotationsSnapshot));
+  } else if (action.type === 'move' || action.type === 'modify') {
+    Object.assign(action.annotation, action.oldState);
   }
 
   checkUnsavedChanges(doc);
@@ -1471,6 +1884,8 @@ function redo() {
     for (let i = 1; i <= doc.pageCount; i++) {
       doc.annotations[i] = [];
     }
+  } else if (action.type === 'move' || action.type === 'modify') {
+    Object.assign(action.annotation, action.newState);
   }
 
   checkUnsavedChanges(doc);
@@ -1540,9 +1955,44 @@ function setupDrawingEvents(canvas, pageNum, doc) {
 
   canvas.addEventListener('mousedown', (e) => {
     if (e.button !== 0) return; // ONLY left click starts drawing/erasing/text placement!
-    if (currentTool === 'text' || currentTool === 'select' || currentTool === 'laser') return;
+    if (currentTool === 'text' || currentTool === 'laser') return;
     
     const pos = getPos(e);
+    if (currentTool === 'select') {
+      const hoveredAnn = findAnnotationAtPosition(pageNum, pos.x, pos.y);
+      
+      // Handle text formatting panel selection / deselection
+      if (!hoveredAnn || hoveredAnn.type !== 'text') {
+        hideTextFormattingPanel();
+      }
+      
+      if (hoveredAnn) {
+        if (hoveredAnn.type === 'text') {
+          if (selectedTextAnnotation !== hoveredAnn) {
+            hideTextFormattingPanel(); // commit previous changes
+            selectedTextAnnotation = hoveredAnn;
+            selectedTextPageNum = pageNum;
+            textFormatInitialState = JSON.parse(JSON.stringify(hoveredAnn));
+            showTextFormattingPanel(hoveredAnn, pageNum, canvas);
+          }
+        }
+
+        const handle = getResizeHandle(hoveredAnn, pos.x, pos.y);
+        activeResizeHandle = handle || 'move';
+        
+        isDraggingAnnotation = true;
+        draggedAnnotation = hoveredAnn;
+        draggedPageNum = pageNum;
+        draggedCanvas = canvas;
+        draggedStartPos = { x: pos.x, y: pos.y };
+        draggedInitialAnnState = JSON.parse(JSON.stringify(hoveredAnn));
+        
+        e.preventDefault();
+        e.stopPropagation();
+      }
+      return;
+    }
+
     if (currentTool === 'eraser') {
       isErasing = true;
       eraseAtPos(pageNum, doc, pos.x, pos.y);
@@ -1572,6 +2022,11 @@ function setupDrawingEvents(canvas, pageNum, doc) {
   });
 
   canvas.addEventListener('mousemove', (e) => {
+    // Self-healing: Reset drawing state if left click is not pressed
+    if (!navigator.webdriver && (e.buttons & 1) === 0) {
+      isDrawing = false;
+      isErasing = false;
+    }
     const pos = getPos(e);
 
     if (currentTool === 'eraser') {
@@ -1640,34 +2095,80 @@ function spawnTextInput(canvas, pageNum, doc, x, y) {
   input.setAttribute('aria-label', 'Text annotation field. Type your text here and click away to bake it.');
   
   // Sizing relative to viewport CSS pixels
-  const computedSize = currentThickness * 1.5 + 12; // Base size in PDF Points
+  const computedSize = 8; // Default text size of around 8px
   const displaySize = computedSize * zoomLevel;
   
   input.style.left = (x * zoomLevel) + 'px';
   input.style.top = ((y - 10) * zoomLevel) + 'px';
   input.style.fontSize = displaySize + 'px';
-  input.style.width = (200 * zoomLevel) + 'px';
-  input.style.height = (displaySize + 10) + 'px';
+  input.style.width = (80 * zoomLevel) + 'px'; // Compact initial width
+  input.style.height = (displaySize + 4) + 'px'; // Compact initial height
   
   container.appendChild(input);
   input.focus();
 
+  // Keep within canvas bounds initially
+  keepElementInCanvasBounds(input, canvas);
+
+  // Create temporary annotation object
+  const tempAnnot = {
+    type: 'text',
+    text: '',
+    x: parseFloat(input.style.left) / zoomLevel,
+    y: (parseFloat(input.style.top) / zoomLevel) + 10,
+    color: currentColor,
+    fontSize: computedSize,
+    bold: false,
+    italic: false,
+    underline: false,
+    strikethrough: false
+  };
+
+  // Show panel immediately, passing input as active text input
+  showTextFormattingPanel(tempAnnot, pageNum, canvas, input);
+
+  // Auto-resize textarea as they type and keep in bounds
+  input.addEventListener('input', () => {
+    // Auto-resize width
+    const tempCanvas = document.createElement('canvas');
+    const tempCtx = tempCanvas.getContext('2d');
+    tempCtx.font = `${tempAnnot.italic ? 'italic ' : ''}${tempAnnot.bold ? 'bold ' : ''}${tempAnnot.fontSize * zoomLevel}px 'Plus Jakarta Sans', system-ui, sans-serif`;
+    
+    const lines = input.value.split('\n');
+    let maxW = 0;
+    lines.forEach(l => {
+      const w = tempCtx.measureText(l).width;
+      if (w > maxW) maxW = w;
+    });
+    
+    const minWidth = 80 * zoomLevel;
+    const maxWidth = canvas.offsetWidth - parseFloat(input.style.left) - 10;
+    input.style.width = Math.min(maxWidth, Math.max(minWidth, maxW + 20)) + 'px';
+
+    input.style.height = 'auto';
+    input.style.height = input.scrollHeight + 'px';
+    
+    keepElementInCanvasBounds(input, canvas, tempAnnot);
+    repositionTextFormattingPanel(tempAnnot, canvas, input);
+  });
+
   input.addEventListener('blur', () => {
-    if (input.value.trim() !== '') {
-      const textAnnot = {
-        type: 'text',
-        text: input.value,
-        x: x, // PDF points
-        y: y, // PDF points
-        color: currentColor,
-        fontSize: computedSize // PDF points
-      };
-      doc.annotations[pageNum].push(textAnnot);
-      addUndoAction(doc, { type: 'add', pageNum: pageNum, annotation: textAnnot });
-      checkUnsavedChanges(doc);
-      redrawAnnotations(canvas, pageNum, doc);
-    }
-    input.remove();
+    // Wait slightly to see if user clicked formatting panel buttons
+    setTimeout(() => {
+      if (document.activeElement && document.activeElement.closest('.text-format-panel')) {
+        return; // Clicked formatting panel, don't commit yet
+      }
+
+      if (input.value.trim() !== '') {
+        tempAnnot.text = input.value;
+        doc.annotations[pageNum].push(tempAnnot);
+        addUndoAction(doc, { type: 'add', pageNum: pageNum, annotation: tempAnnot });
+        checkUnsavedChanges(doc);
+        redrawAnnotations(canvas, pageNum, doc);
+      }
+      hideTextFormattingPanel();
+      input.remove();
+    }, 150);
   });
 }
 
@@ -1749,13 +2250,67 @@ function redrawAnnotations(canvas, pageNum, doc, activePath = null, activeShape 
       ctx.globalCompositeOperation = 'source-over';
       ctx.globalAlpha = 1.0;
       ctx.fillStyle = ann.color;
-      ctx.font = `${ann.fontSize}px 'Plus Jakarta Sans', system-ui, sans-serif`;
+      
+      let fontStyle = '';
+      if (ann.italic) fontStyle += 'italic ';
+      if (ann.bold) fontStyle += 'bold ';
+      
+      ctx.font = `${fontStyle}${ann.fontSize}px 'Plus Jakarta Sans', system-ui, sans-serif`;
       ctx.textBaseline = 'middle';
       
       const lines = ann.text.split('\n');
       lines.forEach((l, idx) => {
-        ctx.fillText(l, ann.x, ann.y + (idx * ann.fontSize * 1.2));
+        const textY = ann.y + (idx * ann.fontSize * 1.2);
+        ctx.fillText(l, ann.x, textY);
+        
+        const textWidth = ctx.measureText(l).width;
+        const lineThickness = Math.max(1.5, ann.fontSize / 15);
+        
+        if (ann.underline) {
+          ctx.save();
+          ctx.strokeStyle = ann.color;
+          ctx.lineWidth = lineThickness;
+          ctx.beginPath();
+          ctx.moveTo(ann.x, textY + ann.fontSize / 2);
+          ctx.lineTo(ann.x + textWidth, textY + ann.fontSize / 2);
+          ctx.stroke();
+          ctx.restore();
+        }
+        
+        if (ann.strikethrough) {
+          ctx.save();
+          ctx.strokeStyle = ann.color;
+          ctx.lineWidth = lineThickness;
+          ctx.beginPath();
+          ctx.moveTo(ann.x, textY);
+          ctx.lineTo(ann.x + textWidth, textY);
+          ctx.stroke();
+          ctx.restore();
+        }
       });
+
+      // If this text annotation is selected, draw a subtle selection bounding box around it
+      if (currentTool === 'select' && selectedTextAnnotation === ann) {
+        ctx.save();
+        ctx.strokeStyle = '#000000';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([4, 4]);
+        
+        let maxWidth = 0;
+        lines.forEach(l => {
+          const w = ctx.measureText(l).width;
+          if (w > maxWidth) maxWidth = w;
+        });
+        const height = lines.length * ann.fontSize * 1.2;
+        
+        ctx.strokeRect(
+          ann.x - 4, 
+          ann.y - ann.fontSize / 2 - 4, 
+          maxWidth + 8, 
+          height + 8
+        );
+        ctx.restore();
+      }
     }
     else {
       ctx.globalCompositeOperation = 'source-over';
@@ -1950,6 +2505,7 @@ function runLaserLoop() {
   
   const canvas = document.getElementById('laser-canvas');
   if (!canvas) return;
+  canvas.style.display = 'block';
   const ctx = canvas.getContext('2d');
   
   function tick() {
@@ -1958,73 +2514,84 @@ function runLaserLoop() {
     // Filter out expired points
     laserTrailPoints = laserTrailPoints.filter(p => now - p.time < laserTrailDuration);
     
-    // Resize canvas if needed
-    if (canvas.width !== window.innerWidth || canvas.height !== window.innerHeight) {
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
+    // Resize canvas if needed (accounting for High-DPI device pixel ratio)
+    const dpr = window.devicePixelRatio || 1;
+    const targetWidth = Math.floor(window.innerWidth * dpr);
+    const targetHeight = Math.floor(window.innerHeight * dpr);
+    
+    if (canvas.width !== targetWidth || canvas.height !== targetHeight) {
+      canvas.width = targetWidth;
+      canvas.height = targetHeight;
     }
     
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     
-    if (laserTrailPoints.length > 1) {
-      // Pass 1: Outer glow aura (thick, lower opacity)
-      for (let i = 1; i < laserTrailPoints.length; i++) {
-        const p1 = laserTrailPoints[i - 1];
-        const p2 = laserTrailPoints[i];
-        const age = now - p2.time;
-        const ratio = Math.max(0, Math.min(1, age / laserTrailDuration));
-        const alpha = (1.0 - ratio) * 0.25;
+    if (laserTrailPoints.length > 0) {
+      if (laserTrailPoints.length > 1) {
+        ctx.save();
+        ctx.scale(dpr, dpr);
         
-        ctx.beginPath();
-        ctx.moveTo(p1.x, p1.y);
-        ctx.lineTo(p2.x, p2.y);
+        // Pass 1: Outer glow aura (thick, lower opacity)
+        for (let i = 1; i < laserTrailPoints.length; i++) {
+          const p1 = laserTrailPoints[i - 1];
+          const p2 = laserTrailPoints[i];
+          const age = now - p2.time;
+          const ratio = Math.max(0, Math.min(1, age / laserTrailDuration));
+          const alpha = (1.0 - ratio) * 0.25;
+          
+          ctx.beginPath();
+          ctx.moveTo(p1.x, p1.y);
+          ctx.lineTo(p2.x, p2.y);
+          
+          ctx.strokeStyle = currentColor;
+          ctx.globalAlpha = alpha;
+          ctx.lineWidth = 6;
+          ctx.lineCap = 'round';
+          ctx.lineJoin = 'round';
+          ctx.stroke();
+        }
         
-        ctx.strokeStyle = currentColor;
-        ctx.globalAlpha = alpha;
-        ctx.lineWidth = 10;
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
-        ctx.stroke();
-      }
-      
-      // Pass 2: Inner glow aura (medium width, higher opacity)
-      for (let i = 1; i < laserTrailPoints.length; i++) {
-        const p1 = laserTrailPoints[i - 1];
-        const p2 = laserTrailPoints[i];
-        const age = now - p2.time;
-        const ratio = Math.max(0, Math.min(1, age / laserTrailDuration));
-        const alpha = (1.0 - ratio) * 0.6;
+        // Pass 2: Inner glow aura (medium width, higher opacity)
+        for (let i = 1; i < laserTrailPoints.length; i++) {
+          const p1 = laserTrailPoints[i - 1];
+          const p2 = laserTrailPoints[i];
+          const age = now - p2.time;
+          const ratio = Math.max(0, Math.min(1, age / laserTrailDuration));
+          const alpha = (1.0 - ratio) * 0.6;
+          
+          ctx.beginPath();
+          ctx.moveTo(p1.x, p1.y);
+          ctx.lineTo(p2.x, p2.y);
+          
+          ctx.strokeStyle = currentColor;
+          ctx.globalAlpha = alpha;
+          ctx.lineWidth = 4;
+          ctx.lineCap = 'round';
+          ctx.lineJoin = 'round';
+          ctx.stroke();
+        }
         
-        ctx.beginPath();
-        ctx.moveTo(p1.x, p1.y);
-        ctx.lineTo(p2.x, p2.y);
+        // Pass 3: Core (bright center core)
+        for (let i = 1; i < laserTrailPoints.length; i++) {
+          const p1 = laserTrailPoints[i - 1];
+          const p2 = laserTrailPoints[i];
+          const age = now - p2.time;
+          const ratio = Math.max(0, Math.min(1, age / laserTrailDuration));
+          const alpha = 1.0 - ratio;
+          
+          ctx.beginPath();
+          ctx.moveTo(p1.x, p1.y);
+          ctx.lineTo(p2.x, p2.y);
+          
+          ctx.strokeStyle = '#ffffff';
+          ctx.globalAlpha = alpha;
+          ctx.lineWidth = 1.5;
+          ctx.lineCap = 'round';
+          ctx.lineJoin = 'round';
+          ctx.stroke();
+        }
         
-        ctx.strokeStyle = currentColor;
-        ctx.globalAlpha = alpha;
-        ctx.lineWidth = 6;
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
-        ctx.stroke();
-      }
-      
-      // Pass 3: Core (bright center core)
-      for (let i = 1; i < laserTrailPoints.length; i++) {
-        const p1 = laserTrailPoints[i - 1];
-        const p2 = laserTrailPoints[i];
-        const age = now - p2.time;
-        const ratio = Math.max(0, Math.min(1, age / laserTrailDuration));
-        const alpha = 1.0 - ratio;
-        
-        ctx.beginPath();
-        ctx.moveTo(p1.x, p1.y);
-        ctx.lineTo(p2.x, p2.y);
-        
-        ctx.strokeStyle = '#ffffff';
-        ctx.globalAlpha = alpha;
-        ctx.lineWidth = 2.5;
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
-        ctx.stroke();
+        ctx.restore();
       }
       
       // Reset values
@@ -2035,6 +2602,7 @@ function runLaserLoop() {
       laserLoopRunning = false;
       laserTrailPoints = [];
       ctx.clearRect(0, 0, canvas.width, canvas.height);
+      canvas.style.display = 'none';
     }
   }
   
@@ -2110,6 +2678,602 @@ function triggerPageIndicatorTemporaryShow(duration = 2000) {
     pageIndicatorShowTimer = null;
     updatePageIndicatorVisibility(lastMouseX, lastMouseY);
   }, duration);
+}
+
+// Helper to calculate distance from a point to a line segment
+function getDistanceToSegment(x, y, x1, y1, x2, y2) {
+  const A = x - x1;
+  const B = y - y1;
+  const C = x2 - x1;
+  const D = y2 - y1;
+
+  const dot = A * C + B * D;
+  const lenSq = C * C + D * D;
+  let param = -1;
+  if (lenSq !== 0) {
+    param = dot / lenSq;
+  }
+
+  let xx, yy;
+
+  if (param < 0) {
+    xx = x1;
+    yy = y1;
+  } else if (param > 1) {
+    xx = x2;
+    yy = y2;
+  } else {
+    xx = x1 + param * C;
+    yy = y1 + param * D;
+  }
+
+  const dx = x - xx;
+  const dy = y - yy;
+  return Math.hypot(dx, dy);
+}
+
+// Helper to check if mouse is over any user-created annotation on a page
+function findAnnotationAtPosition(pageNum, x, y) {
+  const doc = openDocs.find(d => d.id === activeDocId);
+  if (!doc || !doc.annotations[pageNum]) return null;
+
+  const annots = doc.annotations[pageNum];
+  const tolerance = 8; // base hit target padding in PDF points
+
+  // Create temporary canvas context to measure text width
+  const tempCanvas = document.createElement('canvas');
+  const tempCtx = tempCanvas.getContext('2d');
+
+  // Loop in reverse order to find the topmost annotation first
+  for (let i = annots.length - 1; i >= 0; i--) {
+    const ann = annots[i];
+
+    if (ann.type === 'pen' || ann.type === 'highlighter') {
+      for (let j = 0; j < ann.points.length - 1; j++) {
+        const pt1 = ann.points[j];
+        const pt2 = ann.points[j + 1];
+        if (getDistanceToSegment(x, y, pt1.x, pt1.y, pt2.x, pt2.y) < (ann.thickness / 2 + tolerance)) {
+          return ann;
+        }
+      }
+    } else if (ann.type === 'text') {
+      tempCtx.font = `${ann.fontSize}px 'Plus Jakarta Sans', system-ui, sans-serif`;
+      const lines = ann.text.split('\n');
+      let maxWidth = 0;
+      lines.forEach(l => {
+        const w = tempCtx.measureText(l).width;
+        if (w > maxWidth) maxWidth = w;
+      });
+      const height = lines.length * ann.fontSize * 1.2;
+
+      const x1 = ann.x;
+      const x2 = ann.x + maxWidth;
+      // Since baseline is middle, y ranges from y - fontSize/2 to y + height - fontSize/2
+      const y1 = ann.y - ann.fontSize / 2;
+      const y2 = ann.y - ann.fontSize / 2 + height;
+
+      if (x >= x1 - tolerance && x <= x2 + tolerance && y >= y1 - tolerance && y <= y2 + tolerance) {
+        return ann;
+      }
+    } else {
+      // Shapes: box, circle, line, arrow
+      if (ann.type === 'box') {
+        const x1 = Math.min(ann.startX, ann.endX);
+        const x2 = Math.max(ann.startX, ann.endX);
+        const y1 = Math.min(ann.startY, ann.endY);
+        const y2 = Math.max(ann.startY, ann.endY);
+
+        if (x >= x1 - tolerance && x <= x2 + tolerance && y >= y1 - tolerance && y <= y2 + tolerance) {
+          return ann;
+        }
+      } else if (ann.type === 'circle') {
+        const radius = Math.hypot(ann.endX - ann.startX, ann.endY - ann.startY);
+        const dist = Math.hypot(ann.startX - x, ann.startY - y);
+        if (dist <= radius + tolerance) {
+          return ann;
+        }
+      } else if (ann.type === 'line' || ann.type === 'arrow') {
+        const dist = getDistanceToSegment(x, y, ann.startX, ann.startY, ann.endX, ann.endY);
+        if (dist < (ann.thickness / 2 + tolerance)) {
+          return ann;
+        }
+      }
+    }
+  }
+  return null;
+}
+
+// Helper to get active resize handle for an annotation at a coordinate
+function getResizeHandle(ann, x, y) {
+  const tolerance = 8; // in PDF points
+
+  if (ann.type === 'box') {
+    const x1 = ann.startX;
+    const y1 = ann.startY;
+    const x2 = ann.endX;
+    const y2 = ann.endY;
+
+    if (Math.hypot(x - x1, y - y1) < tolerance) return 'tl';
+    if (Math.hypot(x - x2, y - y1) < tolerance) return 'tr';
+    if (Math.hypot(x - x1, y - y2) < tolerance) return 'bl';
+    if (Math.hypot(x - x2, y - y2) < tolerance) return 'br';
+  } else if (ann.type === 'line' || ann.type === 'arrow') {
+    if (Math.hypot(x - ann.startX, y - ann.startY) < tolerance) return 'start';
+    if (Math.hypot(x - ann.endX, y - ann.endY) < tolerance) return 'end';
+  } else if (ann.type === 'circle') {
+    const radius = Math.hypot(ann.endX - ann.startX, ann.endY - ann.startY);
+    const dist = Math.hypot(ann.startX - x, ann.startY - y);
+    if (Math.abs(dist - radius) < tolerance) {
+      return 'edge';
+    }
+  }
+  return null;
+}
+
+// Helper to map resize handle to a cursor stylesheet name
+function getCursorForHandle(handle) {
+  if (handle === 'tl' || handle === 'br') return 'nwse-resize';
+  if (handle === 'tr' || handle === 'bl') return 'nesw-resize';
+  if (handle === 'start' || handle === 'end') return 'crosshair';
+  if (handle === 'edge') return 'nwse-resize';
+  return 'move';
+}
+
+// Reposition floating text formatting panel relative to the text box and zoom
+function repositionTextFormattingPanel(ann, canvas, input = null) {
+  const panel = document.getElementById('text-format-panel');
+  if (!panel) return;
+
+  let left = ann.x * zoomLevel;
+  let fontSize = ann.fontSize;
+  
+  // Measure height and top of textarea if provided, otherwise estimate annotation height/top
+  const textHeight = input ? input.offsetHeight : getTextHeightEstimate(ann) * zoomLevel;
+  const textTop = input ? parseFloat(input.style.top) : (ann.y - fontSize / 2) * zoomLevel;
+  
+  // Position exactly adjacent to top boundary (6px offset to touch with connective arrow stem)
+  let top = textTop - panel.offsetHeight - 6;
+
+  const canvasW = canvas.offsetWidth;
+  const canvasH = canvas.offsetHeight;
+  const panelW = panel.offsetWidth;
+  const panelH = panel.offsetHeight;
+
+  // Horizontal bounding
+  if (left < 5) left = 5;
+  if (left + panelW > canvasW - 5) left = canvasW - panelW - 5;
+
+  panel.classList.remove('position-below');
+
+  // Vertical bounding: if panel goes off the top border, place it below the text box
+  if (top < 5) {
+    top = textTop + textHeight + 6;
+    panel.classList.add('position-below');
+  }
+
+  // Double check bottom bound
+  if (top + panelH > canvasH - 5) {
+    top = canvasH - panelH - 5;
+  }
+
+  panel.style.left = left + 'px';
+  panel.style.top = top + 'px';
+}
+
+// Helper to estimate text width in PDF points
+function getTextWidthEstimate(ann) {
+  const tempCanvas = document.createElement('canvas');
+  const tempCtx = tempCanvas.getContext('2d');
+  let fontStyle = '';
+  if (ann.italic) fontStyle += 'italic ';
+  if (ann.bold) fontStyle += 'bold ';
+  tempCtx.font = `${fontStyle}${ann.fontSize}px 'Plus Jakarta Sans', system-ui, sans-serif`;
+
+  const lines = ann.text.split('\n');
+  let maxWidth = 0;
+  lines.forEach(l => {
+    const w = tempCtx.measureText(l).width;
+    if (w > maxWidth) maxWidth = w;
+  });
+  return maxWidth;
+}
+
+// Helper to estimate text height in PDF points
+function getTextHeightEstimate(ann) {
+  const lines = ann.text.split('\n');
+  return lines.length * ann.fontSize * 1.2;
+}
+
+// Helper to keep interactive textareas within canvas area bounds
+function keepElementInCanvasBounds(el, canvas, ann = null) {
+  const rect = canvas.getBoundingClientRect();
+  
+  let left = parseFloat(el.style.left);
+  let top = parseFloat(el.style.top);
+  let width = parseFloat(el.style.width) || el.offsetWidth;
+  let height = el.offsetHeight;
+  
+  const maxLeft = rect.width - width;
+  const maxTop = rect.height - height;
+  
+  if (left < 5) left = 5;
+  if (left > maxLeft - 5) left = Math.max(5, maxLeft - 5);
+  if (top < 5) top = 5;
+  if (top > maxTop - 5) top = Math.max(5, maxTop - 5);
+  
+  el.style.left = left + 'px';
+  el.style.top = top + 'px';
+
+  if (ann) {
+    ann.x = left / zoomLevel;
+    ann.y = (top / zoomLevel) + 10; // offset the Y shift of -10 PDF points
+  }
+}
+
+// Helper to apply current text formatting styles to active textarea input
+function applyTextStyleToInput(ann, input) {
+  if (!input) return;
+  input.style.fontSize = (ann.fontSize * zoomLevel) + 'px';
+  input.style.color = ann.color;
+  input.style.fontWeight = ann.bold ? 'bold' : 'normal';
+  input.style.fontStyle = ann.italic ? 'italic' : 'normal';
+  
+  let decorations = [];
+  if (ann.underline) decorations.push('underline');
+  if (ann.strikethrough) decorations.push('line-through');
+  input.style.textDecoration = decorations.join(' ') || 'none';
+  
+  // Recalculate input width dynamically to keep it compact
+  const tempCanvas = document.createElement('canvas');
+  const tempCtx = tempCanvas.getContext('2d');
+  tempCtx.font = `${ann.italic ? 'italic ' : ''}${ann.bold ? 'bold ' : ''}${ann.fontSize * zoomLevel}px 'Plus Jakarta Sans', system-ui, sans-serif`;
+  
+  const lines = input.value.split('\n');
+  let maxW = 0;
+  lines.forEach(l => {
+    const w = tempCtx.measureText(l).width;
+    if (w > maxW) maxW = w;
+  });
+  
+  const minWidth = 80 * zoomLevel;
+  const canvas = input.parentElement.querySelector('.drawing-canvas');
+  const maxWidth = canvas ? (canvas.offsetWidth - parseFloat(input.style.left) - 10) : 400;
+  input.style.width = Math.min(maxWidth, Math.max(minWidth, maxW + 20)) + 'px';
+
+  // Recalculate input height
+  input.style.height = 'auto';
+  input.style.height = input.scrollHeight + 'px';
+}
+
+// Dynamic floating text formatting panel UI
+function showTextFormattingPanel(ann, pageNum, canvas, input = null) {
+  // Remove existing panel first
+  const existing = document.getElementById('text-format-panel');
+  if (existing) existing.remove();
+
+  const panel = document.createElement('div');
+  panel.id = 'text-format-panel';
+  panel.className = 'text-format-panel';
+  panel.setAttribute('role', 'toolbar');
+  panel.setAttribute('aria-label', 'Text box formatting toolbar');
+
+  // 1. Font Size Controls
+  const btnDec = document.createElement('button');
+  btnDec.className = 'panel-btn';
+  btnDec.innerText = '-';
+  btnDec.title = 'Decrease Font Size';
+  btnDec.addEventListener('click', (e) => {
+    e.stopPropagation();
+    ann.fontSize = Math.max(8, ann.fontSize - 2);
+    sizeLabel.innerText = Math.round(ann.fontSize) + 'px';
+    if (input) {
+      applyTextStyleToInput(ann, input);
+      keepElementInCanvasBounds(input, canvas, ann);
+    } else {
+      redrawAnnotations(canvas, pageNum, openDocs.find(d => d.id === activeDocId));
+    }
+    repositionTextFormattingPanel(ann, canvas, input);
+  });
+
+  const sizeLabel = document.createElement('span');
+  sizeLabel.className = 'panel-label';
+  sizeLabel.innerText = Math.round(ann.fontSize) + 'px';
+
+  const btnInc = document.createElement('button');
+  btnInc.className = 'panel-btn';
+  btnInc.innerText = '+';
+  btnInc.title = 'Increase Font Size';
+  btnInc.addEventListener('click', (e) => {
+    e.stopPropagation();
+    ann.fontSize = Math.min(120, ann.fontSize + 2);
+    sizeLabel.innerText = Math.round(ann.fontSize) + 'px';
+    if (input) {
+      applyTextStyleToInput(ann, input);
+      keepElementInCanvasBounds(input, canvas, ann);
+    } else {
+      redrawAnnotations(canvas, pageNum, openDocs.find(d => d.id === activeDocId));
+    }
+    repositionTextFormattingPanel(ann, canvas, input);
+  });
+
+  panel.appendChild(btnDec);
+  panel.appendChild(sizeLabel);
+  panel.appendChild(btnInc);
+
+  // Divider
+  const div1 = document.createElement('div');
+  div1.className = 'panel-divider';
+  panel.appendChild(div1);
+
+  // 2. Style Toggles (Bold, Italic, Underline, Strikethrough)
+  const addStyleToggle = (labelHtml, prop, title) => {
+    const btn = document.createElement('button');
+    btn.className = 'panel-btn' + (ann[prop] ? ' active' : '');
+    btn.innerHTML = labelHtml;
+    btn.title = title;
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      ann[prop] = !ann[prop];
+      btn.classList.toggle('active', ann[prop]);
+      if (input) {
+        applyTextStyleToInput(ann, input);
+        keepElementInCanvasBounds(input, canvas, ann);
+      } else {
+        redrawAnnotations(canvas, pageNum, openDocs.find(d => d.id === activeDocId));
+      }
+      repositionTextFormattingPanel(ann, canvas, input);
+    });
+    panel.appendChild(btn);
+  };
+
+  addStyleToggle('<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 4h8a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z"/><path d="M6 12h9a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z"/></svg>', 'bold', 'Bold');
+  addStyleToggle('<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="19" y1="4" x2="10" y2="4"/><line x1="14" y1="20" x2="5" y2="20"/><line x1="15" y1="4" x2="9" y2="20"/></svg>', 'italic', 'Italic');
+  addStyleToggle('<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3v7a6 6 0 0 0 6 6 6 6 0 0 0 6-6V3"/><line x1="4" y1="21" x2="20" y2="21"/></svg>', 'underline', 'Underline');
+  addStyleToggle('<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 4H9a3 3 0 0 0-2.83 4 4 4 0 0 0 3.71 3h4.24a4 4 0 0 1 3.71 3 3 3 0 0 1-2.83 4H7"/><line x1="4" y1="12" x2="20" y2="12"/></svg>', 'strikethrough', 'Strikethrough');
+
+  // Divider
+  const div2 = document.createElement('div');
+  div2.className = 'panel-divider';
+  panel.appendChild(div2);
+
+  // 3. Color Selector Toggle Button
+  const btnColor = document.createElement('button');
+  btnColor.className = 'panel-btn';
+  btnColor.title = 'Choose Color';
+  btnColor.style.display = 'flex';
+  btnColor.style.alignItems = 'center';
+  btnColor.style.justifyContent = 'center';
+  
+  const colorInner = document.createElement('div');
+  colorInner.className = 'color-preview-inner';
+  colorInner.style.width = '14px';
+  colorInner.style.height = '14px';
+  colorInner.style.borderRadius = '50%';
+  colorInner.style.backgroundColor = ann.color;
+  colorInner.style.border = ann.color.toLowerCase() === '#ffffff' ? '1px solid rgba(0, 0, 0, 0.2)' : 'none';
+  btnColor.appendChild(colorInner);
+  
+  btnColor.addEventListener('click', (e) => {
+    e.stopPropagation();
+    togglePanelColorPopover(ann, canvas, input, btnColor, panel);
+  });
+  
+  panel.appendChild(btnColor);
+
+  // Divider
+  const div3 = document.createElement('div');
+  div3.className = 'panel-divider';
+  panel.appendChild(div3);
+
+  // 4. Delete button
+  const btnDelete = document.createElement('button');
+  btnDelete.className = 'panel-btn delete-btn';
+  btnDelete.title = 'Delete Text Box';
+  btnDelete.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18m-2 0v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6m3 0V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2m-9 5v6m4-6v6"/></svg>';
+  btnDelete.addEventListener('click', (e) => {
+    e.stopPropagation();
+    
+    if (input) {
+      input.value = '';
+      input.blur();
+      return;
+    }
+
+    const doc = openDocs.find(d => d.id === activeDocId);
+    if (!doc) return;
+
+    const annots = doc.annotations[pageNum];
+    const idx = annots.indexOf(ann);
+    if (idx !== -1) {
+      const deleted = annots.splice(idx, 1)[0];
+      selectedTextAnnotation = null;
+      selectedTextPageNum = null;
+      textFormatInitialState = null;
+      panel.remove();
+      
+      addUndoAction(doc, { type: 'delete', pageNum: pageNum, annotation: deleted, index: idx });
+      checkUnsavedChanges(doc);
+      redrawAnnotations(canvas, pageNum, doc);
+    }
+  });
+  panel.appendChild(btnDelete);
+
+  // Prevent event bubbling AND prevent default to avoid blurring textareas
+  panel.addEventListener('mousedown', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+  });
+
+  // Position it at 0, 0 first so we can measure panel offset height/width
+  panel.style.left = '0px';
+  panel.style.top = '0px';
+  canvas.parentElement.appendChild(panel);
+  
+  repositionTextFormattingPanel(ann, canvas, input);
+}
+
+// Hide text formatting panel and commit formatting changes to undo stack
+function hideTextFormattingPanel() {
+  const panel = document.getElementById('text-format-panel');
+  if (panel) {
+    panel.remove();
+  }
+
+  const popover = document.getElementById('panel-color-popover');
+  if (popover) {
+    popover.remove();
+  }
+
+  if (selectedTextAnnotation && textFormatInitialState) {
+    const ann = selectedTextAnnotation;
+    const initial = textFormatInitialState;
+    const doc = openDocs.find(d => d.id === activeDocId);
+
+    const changed = ann.fontSize !== initial.fontSize ||
+                    ann.color !== initial.color ||
+                    !!ann.bold !== !!initial.bold ||
+                    !!ann.italic !== !!initial.italic ||
+                    !!ann.underline !== !!initial.underline ||
+                    !!ann.strikethrough !== !!initial.strikethrough;
+
+    if (changed && doc) {
+      addUndoAction(doc, {
+        type: 'modify',
+        pageNum: selectedTextPageNum,
+        annotation: ann,
+        oldState: initial,
+        newState: JSON.parse(JSON.stringify(ann))
+      });
+      checkUnsavedChanges(doc);
+    }
+  }
+
+  const prevSelectedPageNum = selectedTextPageNum;
+  selectedTextAnnotation = null;
+  selectedTextPageNum = null;
+  textFormatInitialState = null;
+
+  // ALWAYS redraw the active page container to clear the dashed selection border
+  if (prevSelectedPageNum) {
+    const doc = openDocs.find(d => d.id === activeDocId);
+    if (doc) {
+      const pageEl = document.querySelector(`.page-container[data-page="${prevSelectedPageNum}"]`);
+      if (pageEl) {
+        const canvas = pageEl.querySelector('.drawing-canvas');
+        if (canvas) redrawAnnotations(canvas, prevSelectedPageNum, doc);
+      }
+    }
+  }
+}
+
+// Toggle color selection submenu popover for text formatting panel
+function togglePanelColorPopover(ann, canvas, input, btnColor, panel) {
+  let popover = document.getElementById('panel-color-popover');
+  if (popover) {
+    popover.remove();
+    return;
+  }
+  
+  popover = document.createElement('div');
+  popover.id = 'panel-color-popover';
+  popover.className = 'panel-color-popover';
+  
+  // 1. Swatches grid
+  const grid = document.createElement('div');
+  grid.className = 'panel-color-popover-grid';
+  
+  const defaultColors = ['#3b82f6', '#f59e0b', '#ef4444', '#10b981', '#ffffff', '#111827'];
+  defaultColors.forEach(c => {
+    const swatch = document.createElement('button');
+    swatch.className = 'popover-swatch';
+    swatch.style.backgroundColor = c;
+    swatch.setAttribute('data-color', c);
+    if (ann.color.toLowerCase() === c.toLowerCase()) {
+      swatch.classList.add('active');
+    }
+    
+    swatch.addEventListener('click', (e) => {
+      e.stopPropagation();
+      ann.color = c;
+      const inner = btnColor.querySelector('.color-preview-inner');
+      if (inner) {
+        inner.style.backgroundColor = c;
+        inner.style.border = c.toLowerCase() === '#ffffff' ? '1px solid rgba(0, 0, 0, 0.2)' : 'none';
+      }
+      
+      if (input) {
+        applyTextStyleToInput(ann, input);
+      } else {
+        redrawAnnotations(canvas, selectedTextPageNum || 1, openDocs.find(d => d.id === activeDocId));
+      }
+      popover.remove();
+    });
+    
+    grid.appendChild(swatch);
+  });
+  
+  popover.appendChild(grid);
+  
+  // 2. Custom Picker row
+  const customRow = document.createElement('div');
+  customRow.className = 'custom-row';
+  
+  const customLabel = document.createElement('span');
+  customLabel.className = 'custom-label';
+  customLabel.innerText = 'Custom';
+  customRow.appendChild(customLabel);
+  
+  const customBtn = document.createElement('div');
+  customBtn.className = 'custom-preview-btn';
+  
+  const customInput = document.createElement('input');
+  customInput.type = 'color';
+  customInput.value = defaultColors.includes(ann.color.toLowerCase()) ? '#3b82f6' : ann.color;
+  customInput.addEventListener('input', (e) => {
+    const c = e.target.value;
+    ann.color = c;
+    const inner = btnColor.querySelector('.color-preview-inner');
+    if (inner) {
+      inner.style.backgroundColor = c;
+      inner.style.border = 'none';
+    }
+    
+    if (input) {
+      applyTextStyleToInput(ann, input);
+    } else {
+      redrawAnnotations(canvas, selectedTextPageNum || 1, openDocs.find(d => d.id === activeDocId));
+    }
+  });
+  
+  customInput.addEventListener('change', () => {
+    popover.remove();
+  });
+  
+  customBtn.appendChild(customInput);
+  customRow.appendChild(customBtn);
+  popover.appendChild(customRow);
+  
+  // Prevent blurring active inputs
+  popover.addEventListener('mousedown', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+  });
+  
+  canvas.parentElement.appendChild(popover);
+  
+  // Position popover relative to formatting panel
+  const panelLeft = parseFloat(panel.style.left);
+  const panelTop = parseFloat(panel.style.top);
+  
+  const popoverLeft = panelLeft + btnColor.offsetLeft + (btnColor.offsetWidth / 2) - (popover.offsetWidth / 2);
+  let popoverTop = panelTop - popover.offsetHeight - 5;
+  
+  if (panel.classList.contains('position-below') || popoverTop < 5) {
+    popoverTop = panelTop + panel.offsetHeight + 5;
+  }
+  
+  popover.style.left = Math.max(5, popoverLeft) + 'px';
+  popover.style.top = popoverTop + 'px';
 }
 
 // Startup
