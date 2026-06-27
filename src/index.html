@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PDFpresent by Somansh Garg</title>
+  
+  <!-- Premium Google Fonts pairing for high-end SaaS aesthetic -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Frameless Title Bar (Draggable) -->
+  <header id="titlebar" role="banner">
+    <div class="app-title">PDFpresent <span class="app-author">Built by Somansh Garg v2.4</span></div>
+    <div id="tabs-container" role="tablist" aria-label="Opened PDF Documents">
+      <!-- Tabs will be dynamically inserted here -->
+    </div>
+  </header>
+
+  <div id="app-container">
+    <!-- Unified Floating Layout Toolbar -->
+    <nav id="app-toolbar" class="floating-panel" role="toolbar" aria-label="PDF Control Toolbar">
+      <!-- Group 1: File Actions -->
+      <div class="toolbar-group" role="group" aria-label="File Actions">
+        <button class="tool-btn" id="btn-open" title="Open PDF (Ctrl+O)" aria-label="Open new PDF file">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+        </button>
+        <button class="tool-btn save-btn highlight-save" id="btn-save" title="Save PDF (Ctrl+S)" aria-label="Save annotations into PDF file" disabled>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+        </button>
+        <button class="tool-btn" id="btn-fullscreen" title="Fullscreen (F11)" aria-label="Toggle Fullscreen presentation view">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/></svg>
+        </button>
+      </div>
+
+      <div class="panel-divider-v"></div>
+
+      <!-- Group 2: Zoom Panel -->
+      <div class="toolbar-group zoom-controls" role="group" aria-label="Zoom controls">
+        <button class="tool-btn" id="btn-zoom-out" title="Zoom Out (Ctrl+-)" aria-label="Zoom out">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        </button>
+        <span id="zoom-val" aria-live="polite">150%</span>
+        <button class="tool-btn" id="btn-zoom-in" title="Zoom In (Ctrl+=)" aria-label="Zoom in">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        </button>
+      </div>
+
+      <div class="panel-divider-v"></div>
+
+      <!-- Group 3: History -->
+      <div class="toolbar-group" role="group" aria-label="History controls">
+        <button class="tool-btn" id="btn-undo" title="Undo (Ctrl+Z)" aria-label="Undo action" disabled>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/></svg>
+        </button>
+        <button class="tool-btn" id="btn-redo" title="Redo (Ctrl+Y)" aria-label="Redo action" disabled>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 7v6h-6"/><path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3l3 2.7"/></svg>
+        </button>
+        <button class="tool-btn text-danger" id="btn-clear-all" title="Clear Annotations" aria-label="Clear all current PDF drawings">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+        </button>
+      </div>
+
+      <div class="panel-divider-v"></div>
+
+      <!-- Group 4: Presenters -->
+      <div class="toolbar-group" role="group" aria-label="Presentation controls">
+        <button class="tool-btn" id="btn-reveal" title="Reveal Curtain (R)" aria-label="Toggle Reveal curtain overlay" aria-pressed="false">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+        </button>
+      </div>
+
+      <div class="panel-divider-v"></div>
+
+      <!-- Group 5: Main Modes -->
+      <div class="toolbar-group" role="group" aria-label="Drawing tools">
+        <button class="tool-btn active" data-tool="select" id="btn-select-mode" title="Select Text / Panning (V)" aria-label="Text selection and panning tool" aria-pressed="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 3 7.07 16.97 2.51-7.39 7.39-2.51L3 3z"/><path d="m13 13 6 6"/></svg>
+        </button>
+        <button class="tool-btn" data-tool="pen" title="Pen (P)" aria-label="Pen drawing tool" aria-pressed="false">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+        </button>
+        <button class="tool-btn" data-tool="highlighter" title="Highlighter (H)" aria-label="Text highlighter tool" aria-pressed="false">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.5 10.5 19 5l3 3-5.5 5.5"/><path d="m15 12.5-9 9-4-1 1-4 9-9"/></svg>
+        </button>
+        <!-- Laser Pointer Group -->
+        <div class="toolbar-dropdown laser-dropdown split-button" id="laser-dropdown">
+          <button class="tool-btn split-main" data-tool="laser" id="btn-laser" title="Laser Pointer (L) / Right-Click" aria-label="Laser Pointer tool" aria-pressed="false">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg>
+          </button>
+          <button class="tool-btn split-arrow" id="btn-laser-arrow" title="Laser Settings" aria-label="Open laser settings menu">
+            <svg class="dropdown-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+          <div class="dropdown-popover laser-popover" role="dialog" aria-label="Laser settings popup">
+            <div class="laser-setting-row">
+              <span class="laser-setting-label">Trail Fade:</span>
+              <input type="range" id="laser-duration-slider" min="200" max="5000" value="800" step="100" aria-label="Select laser trail fade duration in milliseconds">
+              <span id="laser-duration-val">0.8s</span>
+            </div>
+          </div>
+        </div>
+        <button class="tool-btn" data-tool="eraser" title="Eraser (E)" aria-label="Click-to-erase tool" aria-pressed="false">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"/><path d="M22 21H7"/><path d="m5 11 9 9"/></svg>
+        </button>
+      </div>
+
+      <div class="panel-divider-v"></div>
+
+      <!-- Group 6: Shapes Dropdown -->
+      <div class="toolbar-group" role="group" aria-label="Shape tools">
+        <div class="toolbar-dropdown shapes-dropdown split-button" id="shapes-dropdown">
+          <button class="tool-btn split-main" id="btn-shape-select" title="Draw Shape" aria-label="Select shape to draw">
+            <svg id="shape-active-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/></svg>
+          </button>
+          <button class="tool-btn split-arrow" id="btn-shape-arrow" title="Select Shape Type" aria-label="Open shape selection menu">
+            <svg class="dropdown-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+          <div class="dropdown-popover shapes-popover" role="dialog" aria-label="Shape selection popup">
+            <button class="dropdown-item" data-tool="box" title="Rectangle" aria-label="Draw rectangle">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/></svg>
+              <span>Rectangle</span>
+            </button>
+            <button class="dropdown-item" data-tool="circle" title="Circle" aria-label="Draw circle">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/></svg>
+              <span>Circle</span>
+            </button>
+            <button class="dropdown-item" data-tool="line" title="Line" aria-label="Draw line">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="5" y1="19" x2="19" y2="5"/></svg>
+              <span>Line</span>
+            </button>
+            <button class="dropdown-item" data-tool="arrow" title="Arrow" aria-label="Draw arrow">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="5" y1="19" x2="19" y2="5"/><polyline points="12 5 19 5 19 12"/></svg>
+              <span>Arrow</span>
+            </button>
+            <button class="dropdown-item" data-tool="text" title="Text Box (T)" aria-label="Add text box">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7V4h16v3"/><path d="M9 20h6"/><path d="M12 4v16"/></svg>
+              <span>Text Box</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel-divider-v"></div>
+
+      <!-- Group 7: Styles -->
+      <div class="toolbar-group style-controls" role="group" aria-label="Style controls">
+        <!-- Colors Dropdown -->
+        <div class="toolbar-dropdown colors-dropdown split-button" id="colors-dropdown">
+          <button class="tool-btn split-main" id="btn-color-select" title="Active Color" aria-label="Select color">
+            <span class="color-preview-circle" id="color-preview" style="background-color: #3b82f6; width: 14px; height: 14px; border-radius: 50%; border: 1.5px solid #fff; display: inline-block;"></span>
+          </button>
+          <button class="tool-btn split-arrow" id="btn-color-arrow" title="Color Palette" aria-label="Open color palette menu">
+            <svg class="dropdown-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+          <div class="dropdown-popover colors-popover" role="dialog" aria-label="Color selection popup">
+            <div class="color-swatch-grid">
+              <button class="color-swatch active" style="background-color: #3b82f6;" data-color="#3b82f6" title="Blue Preset" aria-label="Blue color preset"></button>
+              <button class="color-swatch" style="background-color: #f59e0b;" data-color="#f59e0b" title="Yellow Preset" aria-label="Yellow color preset"></button>
+              <button class="color-swatch" style="background-color: #ef4444;" data-color="#ef4444" title="Red Preset" aria-label="Red color preset"></button>
+              <button class="color-swatch" style="background-color: #10b981;" data-color="#10b981" title="Green Preset" aria-label="Green color preset"></button>
+              <button class="color-swatch" style="background-color: #ffffff;" data-color="#ffffff" title="White Preset" aria-label="White color preset"></button>
+              <button class="color-swatch" style="background-color: #111827; border: 1px solid var(--border-color);" data-color="#111827" title="Black Preset" aria-label="Black color preset"></button>
+            </div>
+            <div class="dropdown-divider-h"></div>
+            <div class="custom-color-row">
+              <span class="custom-color-label">Custom Color:</span>
+              <div class="custom-color-btn" title="Custom Color" role="button" aria-label="Custom color picker">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M8 12a4 4 0 0 1 8 0"/></svg>
+                <input type="color" id="color-picker" value="#3b82f6" aria-label="Color palette selection picker">
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel-divider-v"></div>
+
+        <!-- Thickness Dropdown -->
+        <div class="toolbar-dropdown thickness-dropdown split-button" id="thickness-dropdown">
+          <button class="tool-btn split-main" id="btn-thickness-select" title="Brush Thickness" aria-label="Adjust brush thickness">
+            <span class="thickness-dot" id="thickness-preview" style="background-color: #3b82f6; width: 3px; height: 3px;" aria-hidden="true"></span>
+          </button>
+          <button class="tool-btn split-arrow" id="btn-thickness-arrow" title="Adjust Thickness" aria-label="Open brush thickness menu">
+            <svg class="dropdown-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+          <div class="dropdown-popover thickness-popover" role="dialog" aria-label="Brush thickness control popup">
+            <input type="range" id="thickness-slider" min="1" max="25" value="3" aria-label="Select brush thickness in pixels">
+            <span id="thickness-val" aria-live="polite">3px</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel-divider-v"></div>
+
+      <!-- Group 8: Layout & Theme -->
+      <div class="toolbar-group" role="group" aria-label="Layout and Theme controls">
+        <button class="tool-btn" id="btn-layout-toggle" title="Switch Toolbar Position" aria-label="Toggle toolbar position (Top/Left)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/></svg>
+        </button>
+        <button class="tool-btn" id="btn-theme-toggle" title="Toggle Theme" aria-label="Toggle Light/Dark theme">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+        </button>
+      </div>
+    </nav>
+
+    <!-- Main Workspace -->
+    <main id="workspace" aria-label="PDF Canvas Workspace">
+      <!-- "Open a File" prompt -->
+      <div id="empty-state">
+        <div class="empty-card">
+          <div class="empty-icon-container">
+            <svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><polyline points="9 15 12 12 15 15"/></svg>
+          </div>
+          <h2>Welcome to PDFpresent</h2>
+          <p>Drag and drop PDF files here, or choose a file from your computer to get started.</p>
+          <button id="btn-open-empty" class="primary-btn" aria-label="Select PDF File from computer">
+            Select PDF File
+          </button>
+        </div>
+      </div>
+
+      <!-- The scrolling container for the current PDF -->
+      <div id="pdf-scroll-container" style="display: none;" tabindex="0" aria-label="PDF Document Pages Scroll area">
+        <!-- Page containers will be dynamically inserted here -->
+      </div>
+      
+      <!-- Reveal mode global overlay (hidden by default) -->
+      <div id="global-reveal-overlay" style="display: none;" role="presentation">
+        <div class="reveal-curtain">
+          <div class="reveal-handle" role="slider" aria-label="Reveal curtain height" aria-valuemin="0" aria-valuemax="100" tabindex="0">Drag to Reveal</div>
+        </div>
+      </div>
+      
+      <!-- Vicinity Hover Zone for Page Indicator -->
+      <div id="page-indicator-zone" style="display: none;">
+        <div id="page-indicator" class="floating-panel" aria-live="polite">
+          <button class="indicator-btn" id="btn-page-prev" title="Previous Page" aria-label="Go to previous page">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>
+          </button>
+          <input type="number" id="current-page-input" min="1" value="1" title="Current Page" aria-label="Enter page number to navigate">
+          <span class="indicator-divider">/</span>
+          <span id="total-pages">1</span>
+          <button class="indicator-btn" id="btn-page-next" title="Next Page" aria-label="Go to next page">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg>
+          </button>
+        </div>
+      </div>
+    </main>
+  </div>
+  
+  <!-- Laser Pointer Element & Fading Pen Canvas -->
+  <div id="laser-dot" style="display: none;" aria-hidden="true"></div>
+  <canvas id="laser-canvas" style="display: none; pointer-events: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 9998;"></canvas>
+
+  <!-- Custom Modal for Unsaved Changes -->
+  <div id="unsaved-modal" class="modal-overlay" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 id="modal-title">Unsaved Changes</h3>
+        <button class="modal-close-btn" id="modal-close" aria-label="Close dialog">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p id="modal-message">Document has unsaved changes. Do you want to save them before closing?</p>
+      </div>
+      <div class="modal-footer">
+        <button class="modal-btn secondary-btn" id="modal-btn-cancel">Cancel</button>
+        <button class="modal-btn secondary-btn danger-outline-btn" id="modal-btn-discard">Don't Save</button>
+        <button class="modal-btn primary-btn" id="modal-btn-save">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Loading local node_modules -->
+  <script src="../node_modules/pdfjs-dist/build/pdf.min.js"></script>
+  <script src="../node_modules/pdf-lib/dist/pdf-lib.min.js"></script>
+  
+  <!-- App Logic -->
+  <script src="app.js"></script>
+</body>
+</html>
