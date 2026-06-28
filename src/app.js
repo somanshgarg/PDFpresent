@@ -1117,6 +1117,22 @@ async function init() {
     });
   }
 
+  // Titlebar Tab Navigation Buttons
+  const btnTabsPrev = document.getElementById('btn-tabs-prev');
+  const btnTabsNext = document.getElementById('btn-tabs-next');
+  if (btnTabsPrev && btnTabsNext && tabsContainer) {
+    btnTabsPrev.addEventListener('click', () => {
+      tabsContainer.scrollBy({ left: -150, behavior: 'smooth' });
+      setTimeout(updateTabNavVisibility, 200);
+    });
+    btnTabsNext.addEventListener('click', () => {
+      tabsContainer.scrollBy({ left: 150, behavior: 'smooth' });
+      setTimeout(updateTabNavVisibility, 200);
+    });
+    tabsContainer.addEventListener('scroll', updateTabNavVisibility);
+    window.addEventListener('resize', updateTabNavVisibility);
+  }
+
   updateAppTitle();
 
   // Vicinity hover page-indicator trigger
@@ -1360,8 +1376,12 @@ async function openPdfDialog() {
 
 // Load Document bytes
 async function loadPdf(fileInfo) {
-  // Deduplicate files
-  const existingDoc = openDocs.find(d => d.filePath === fileInfo.filePath);
+  // Deduplicate files (only if filePath is valid and non-empty)
+  const isPathValid = fileInfo.filePath && fileInfo.filePath.trim() !== '';
+  const existingDoc = isPathValid
+    ? openDocs.find(d => d.filePath && d.filePath.replace(/\\/g, '/').toLowerCase() === fileInfo.filePath.replace(/\\/g, '/').toLowerCase())
+    : null;
+    
   if (existingDoc) {
     setActiveDoc(existingDoc.id);
     return;
@@ -1456,6 +1476,12 @@ function renderTabs() {
     tabsContainer.appendChild(tab);
   });
 
+  // Scroll active tab into view
+  const activeTab = tabsContainer.querySelector('.tab.active');
+  if (activeTab) {
+    activeTab.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+  }
+
   if (openDocs.length === 0) {
     emptyState.style.display = 'flex';
     scrollContainer.style.display = 'none';
@@ -1469,6 +1495,33 @@ function renderTabs() {
     scrollContainer.focus();
   }
   updateUndoRedoButtons();
+  updateTabNavVisibility();
+}
+
+// Updates tab navigation buttons visibility and state based on container overflow
+function updateTabNavVisibility() {
+  const tabsContainer = document.getElementById('tabs-container');
+  const btnTabsPrev = document.getElementById('btn-tabs-prev');
+  const btnTabsNext = document.getElementById('btn-tabs-next');
+  if (!tabsContainer || !btnTabsPrev || !btnTabsNext) return;
+
+  const scrollLeft = tabsContainer.scrollLeft;
+  const maxScrollLeft = tabsContainer.scrollWidth - tabsContainer.clientWidth;
+  const isScrollable = maxScrollLeft > 1;
+
+  if (!isScrollable) {
+    btnTabsPrev.style.display = 'none';
+    btnTabsNext.style.display = 'none';
+  } else {
+    btnTabsPrev.style.display = 'flex';
+    btnTabsNext.style.display = 'flex';
+    
+    btnTabsPrev.style.opacity = scrollLeft > 2 ? '1' : '0.2';
+    btnTabsPrev.style.pointerEvents = scrollLeft > 2 ? 'auto' : 'none';
+    
+    btnTabsNext.style.opacity = scrollLeft < maxScrollLeft - 2 ? '1' : '0.2';
+    btnTabsNext.style.pointerEvents = scrollLeft < maxScrollLeft - 2 ? 'auto' : 'none';
+  }
 }
 
 function setActiveDoc(id) {
@@ -2512,17 +2565,11 @@ function snapToNearestTextSpan(pageNum, x, y) {
   let nearestSpan = null;
   let minDistance = Infinity;
   
-  const containerRect = container.getBoundingClientRect();
-  const drawCanvas = container.querySelector('.drawing-canvas');
-  const pageZoom = drawCanvas ? (parseFloat(drawCanvas.dataset.renderedZoom) || zoomLevel) : zoomLevel;
-  
   spans.forEach(span => {
-    const spanRect = span.getBoundingClientRect();
-    // Calculate coordinates relative to page container, then convert to raw PDF points using rendered pageZoom
-    const spanX = (spanRect.left - containerRect.left) / pageZoom;
-    const spanY = (spanRect.top - containerRect.top) / pageZoom;
-    const spanW = spanRect.width / pageZoom;
-    const spanH = spanRect.height / pageZoom;
+    const spanX = span.offsetLeft / zoomLevel;
+    const spanY = span.offsetTop / zoomLevel;
+    const spanW = span.offsetWidth / zoomLevel;
+    const spanH = span.offsetHeight / zoomLevel;
     
     const centerY = spanY + spanH / 2;
     const vDist = Math.abs(y - centerY);

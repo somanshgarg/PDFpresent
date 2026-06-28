@@ -73,6 +73,7 @@ h1, h2, h3, .app-title {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-shrink: 0;
 }
 
 .app-author {
@@ -87,6 +88,46 @@ h1, h2, h3, .app-title {
   border-left: 1px solid rgba(255, 255, 255, 0.15);
   padding-left: 8px;
   margin-left: 2px;
+}
+
+.tabs-nav-wrapper {
+  display: flex;
+  align-items: center;
+  flex-grow: 1;
+  height: 100%;
+  overflow: hidden;
+  position: relative;
+  margin-right: 140px; /* Space for window controls */
+}
+
+.tab-nav-btn {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.85);
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  display: none; /* Managed by JS depending on overflow */
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+  margin: 0 4px;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.tab-nav-btn:hover {
+  background: rgba(59, 130, 246, 0.15);
+  border-color: rgba(59, 130, 246, 0.35);
+  color: #60a5fa;
+  opacity: 1 !important;
+}
+
+.tab-nav-btn svg {
+  width: 12px;
+  height: 12px;
 }
 
 #tabs-container {
@@ -221,6 +262,13 @@ h1, h2, h3, .app-title {
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
 }
 
+.toolbar-column {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+}
+
 .toolbar-group {
   display: flex;
   flex-direction: row;
@@ -240,12 +288,12 @@ h1, h2, h3, .app-title {
   left: auto;
   top: auto;
   transform: none;
-  flex-direction: column;
-  flex-wrap: wrap;
-  align-content: flex-start;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: flex-start;
   justify-content: flex-start;
   padding: 16px 8px;
-  gap: 6px 8px;
+  gap: 8px;
   width: auto;
   max-width: none;
   flex-shrink: 0;
@@ -256,6 +304,12 @@ h1, h2, h3, .app-title {
   border-top: none;
   border-radius: 0;
   box-shadow: 4px 0 20px rgba(0, 0, 0, 0.4);
+}
+
+#app-toolbar.vertical .toolbar-column {
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
 }
 
 #app-toolbar.vertical .toolbar-group,
@@ -1387,6 +1441,19 @@ body.light-mode {
 /* Light Mode Specific Components Overrides */
 body.light-mode #titlebar {
   background: #ffffff;
+}
+
+body.light-mode .tab-nav-btn {
+  background: rgba(0, 0, 0, 0.03);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  color: var(--text-primary);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+body.light-mode .tab-nav-btn:hover {
+  background: rgba(59, 130, 246, 0.08);
+  border-color: rgba(59, 130, 246, 0.25);
+  color: #2563eb;
 }
 
 body.light-mode #app-toolbar {
