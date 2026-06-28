@@ -5,6 +5,9 @@ contextBridge.exposeInMainWorld('api', {
   saveFileDialog: (defaultName, data) => ipcRenderer.invoke('dialog:saveFile', { defaultName, data }),
   saveFileDirectly: (filePath, data) => ipcRenderer.invoke('fs:writeFile', { filePath, data }),
   getAppVersion: () => ipcRenderer.invoke('app:getVersion'),
-  onTryClose: (callback) => ipcRenderer.on('app:try-close', callback),
+  onTryClose: (callback) => {
+    ipcRenderer.removeAllListeners('app:try-close');
+    ipcRenderer.on('app:try-close', callback);
+  },
   closeApp: () => ipcRenderer.send('app:close'),
 });

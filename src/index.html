@@ -192,13 +192,20 @@
         <!-- Thickness Dropdown -->
         <div class="toolbar-dropdown thickness-dropdown split-button" id="thickness-dropdown">
           <button class="tool-btn split-main" id="btn-thickness-select" title="Brush Thickness" aria-label="Adjust brush thickness">
-            <span class="thickness-dot" id="thickness-preview" style="background-color: #3b82f6; width: 3px; height: 3px;" aria-hidden="true"></span>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="width: 18px; height: 18px; display: block; margin: auto;">
+              <line x1="4" y1="5" x2="20" y2="5" stroke-width="1.5" />
+              <line x1="4" y1="12" x2="20" y2="12" stroke-width="3" />
+              <line x1="4" y1="19" x2="20" y2="19" stroke-width="5" />
+            </svg>
           </button>
           <button class="tool-btn split-arrow" id="btn-thickness-arrow" title="Adjust Thickness" aria-label="Open brush thickness menu">
             <svg class="dropdown-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
           </button>
           <div class="dropdown-popover thickness-popover" role="dialog" aria-label="Brush thickness control popup">
-            <input type="range" id="thickness-slider" min="1" max="25" value="3" aria-label="Select brush thickness in pixels">
+            <div class="thickness-preview-container">
+              <span class="thickness-dot" id="thickness-preview" style="background-color: #3b82f6; width: 3px; height: 3px;" aria-hidden="true"></span>
+            </div>
+            <input type="range" id="thickness-slider" min="1" max="10" value="3" step="0.5" aria-label="Select brush thickness in pixels">
             <span id="thickness-val" aria-live="polite">3px</span>
           </div>
         </div>

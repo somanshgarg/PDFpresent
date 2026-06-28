@@ -14,6 +14,13 @@ let laserTrailDuration = 800; // Default 800ms
 let savedBeforeRightClickTool = null;
 let laserTrailPoints = []; // [{ x, y, time, pageNum }]
 let laserLoopRunning = false;
+function addLaserPoint(x, y) {
+  const MAX_LASER_POINTS = 500;
+  laserTrailPoints.push({ x: x, y: y, time: Date.now() });
+  if (laserTrailPoints.length > MAX_LASER_POINTS) {
+    laserTrailPoints.splice(0, laserTrailPoints.length - MAX_LASER_POINTS);
+  }
+}
 let currentRenderTaskId = 0;
 let lastActivePageNum = 1;
 let pageIndicatorShowTimer = null;
@@ -344,7 +351,7 @@ async function init() {
 
   // Thickness slider
   thicknessSlider.addEventListener('input', (e) => {
-    currentThickness = parseInt(e.target.value);
+    currentThickness = parseFloat(e.target.value);
     updateThicknessPreview();
   });
 
@@ -499,7 +506,7 @@ async function init() {
       const now = Date.now();
       const lastPoint = laserTrailPoints[laserTrailPoints.length - 1];
       if (!lastPoint || Math.hypot(e.clientX - lastPoint.x, e.clientY - lastPoint.y) > 2) {
-        laserTrailPoints.push({ x: e.clientX, y: e.clientY, time: now });
+        addLaserPoint(e.clientX, e.clientY);
         runLaserLoop();
       }
     }
@@ -587,9 +594,9 @@ async function init() {
     if (isFlashlightActive && e.shiftKey) {
       e.preventDefault();
       if (e.deltaY < 0) {
-        currentThickness = Math.min(50, currentThickness + 2);
+        currentThickness = Math.min(10, currentThickness + 0.5);
       } else {
-        currentThickness = Math.max(1, currentThickness - 2);
+        currentThickness = Math.max(1, currentThickness - 0.5);
       }
       updateThicknessPreview();
       updateFlashlight(lastGlobalMousePos.x, lastGlobalMousePos.y);
@@ -646,6 +653,9 @@ async function init() {
     // Allow text selection if user is clicking on a span inside textLayer
     if (e.target.closest('.textLayer span')) return;
     
+    // Clear browser text selection
+    window.getSelection()?.removeAllRanges();
+    
     // Only pan on left click
     if (e.button !== 0) return;
     
@@ -685,8 +695,9 @@ async function init() {
 
     if (isDraggingAnnotation && draggedAnnotation && draggedCanvas) {
       const rect = draggedCanvas.getBoundingClientRect();
-      const rawX = (e.clientX - rect.left) / zoomLevel;
-      const rawY = (e.clientY - rect.top) / zoomLevel;
+      const canvasZoom = parseFloat(draggedCanvas.dataset.renderedZoom) || zoomLevel;
+      const rawX = (e.clientX - rect.left) / canvasZoom;
+      const rawY = (e.clientY - rect.top) / canvasZoom;
       
       const dx = rawX - draggedStartPos.x;
       const dy = rawY - draggedStartPos.y;
@@ -696,8 +707,8 @@ async function init() {
       const doc = openDocs.find(d => d.id === activeDocId);
       
       // Canvas width and height in PDF points
-      const canvasW = draggedCanvas.width / (zoomLevel * (window.devicePixelRatio || 1));
-      const canvasH = draggedCanvas.height / (zoomLevel * (window.devicePixelRatio || 1));
+      const canvasW = draggedCanvas.width / (canvasZoom * (window.devicePixelRatio || 1));
+      const canvasH = draggedCanvas.height / (canvasZoom * (window.devicePixelRatio || 1));
 
       if (activeResizeHandle === 'move') {
         if (ann.type === 'pen' || ann.type === 'highlighter') {
@@ -964,8 +975,9 @@ async function init() {
     if (!canvas) return;
 
     const rect = canvas.getBoundingClientRect();
-    const x = (e.clientX - rect.left) / zoomLevel;
-    const y = (e.clientY - rect.top) / zoomLevel;
+    const canvasZoom = parseFloat(canvas.dataset.renderedZoom) || zoomLevel;
+    const x = (e.clientX - rect.left) / canvasZoom;
+    const y = (e.clientY - rect.top) / canvasZoom;
 
     const ann = findAnnotationAtPosition(pageNum, x, y);
 
@@ -1014,7 +1026,7 @@ async function init() {
       // Position laser dot immediately
       laserDot.style.left = e.clientX + 'px';
       laserDot.style.top = e.clientY + 'px';
-      laserTrailPoints.push({ x: e.clientX, y: e.clientY, time: Date.now() });
+      addLaserPoint(e.clientX, e.clientY);
       runLaserLoop();
     } else if (e.button === 0 && currentTool === 'laser' && workspace.contains(e.target)) { // Left click laser inside PDF area
       isLaserActive = true;
@@ -1024,7 +1036,7 @@ async function init() {
       // Position laser dot immediately
       laserDot.style.left = e.clientX + 'px';
       laserDot.style.top = e.clientY + 'px';
-      laserTrailPoints.push({ x: e.clientX, y: e.clientY, time: Date.now() });
+      addLaserPoint(e.clientX, e.clientY);
       runLaserLoop();
     }
   });
@@ -1125,8 +1137,11 @@ function updateThicknessPreview() {
     thicknessPreview.style.height = Math.max(3, currentThickness) + 'px';
     thicknessPreview.style.backgroundColor = currentColor;
   }
-if (thicknessVal) {
+  if (thicknessVal) {
     thicknessVal.innerText = currentThickness + 'px';
+  }
+  if (thicknessSlider) {
+    thicknessSlider.value = currentThickness;
   }
 }
 
@@ -1345,40 +1360,52 @@ async function openPdfDialog() {
 
 // Load Document bytes
 async function loadPdf(fileInfo) {
-  const docId = 'doc_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
-  
-  // Normalize byte representation
-  let dataBytes = fileInfo.bytes;
-  if (dataBytes && dataBytes.type === 'Buffer') {
-    dataBytes = new Uint8Array(dataBytes.data);
-  } else if (!(dataBytes instanceof Uint8Array)) {
-    dataBytes = new Uint8Array(dataBytes);
+  // Deduplicate files
+  const existingDoc = openDocs.find(d => d.filePath === fileInfo.filePath);
+  if (existingDoc) {
+    setActiveDoc(existingDoc.id);
+    return;
   }
 
-  const loadingTask = pdfjsLib.getDocument({ data: dataBytes.slice() });
-  const pdfDoc = await loadingTask.promise;
+  try {
+    const docId = 'doc_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
+    
+    // Normalize byte representation
+    let dataBytes = fileInfo.bytes;
+    if (dataBytes && dataBytes.type === 'Buffer') {
+      dataBytes = new Uint8Array(dataBytes.data);
+    } else if (!(dataBytes instanceof Uint8Array)) {
+      dataBytes = new Uint8Array(dataBytes);
+    }
 
-  const newDoc = {
-    id: docId,
-    name: fileInfo.name,
-    filePath: fileInfo.filePath,
-    bytes: dataBytes,
-    pdfDoc: pdfDoc,
-    pageCount: pdfDoc.numPages,
-    annotations: {},
-    undoStack: [],
-    redoStack: [],
-    hasUnsavedChanges: false
-  };
+    const loadingTask = pdfjsLib.getDocument({ data: dataBytes.slice() });
+    const pdfDoc = await loadingTask.promise;
 
-  for (let i = 1; i <= newDoc.pageCount; i++) {
-    newDoc.annotations[i] = [];
+    const newDoc = {
+      id: docId,
+      name: fileInfo.name,
+      filePath: fileInfo.filePath,
+      bytes: dataBytes,
+      pdfDoc: pdfDoc,
+      pageCount: pdfDoc.numPages,
+      annotations: {},
+      undoStack: [],
+      redoStack: [],
+      hasUnsavedChanges: false
+    };
+
+    for (let i = 1; i <= newDoc.pageCount; i++) {
+      newDoc.annotations[i] = [];
+    }
+    newDoc.baselineState = JSON.stringify(newDoc.annotations);
+
+    openDocs.push(newDoc);
+    setActiveDoc(docId);
+    renderTabs();
+  } catch (e) {
+    console.error('Failed to load PDF:', e);
+    alert(`Could not open "${fileInfo.name}".\n${e.message || 'The file may be corrupt or password-protected.'}`);
   }
-  newDoc.baselineState = JSON.stringify(newDoc.annotations);
-
-  openDocs.push(newDoc);
-  setActiveDoc(docId);
-  renderTabs();
 }
 
 // Renders open tabs with accessibility keyboard traversal
@@ -1721,6 +1748,7 @@ async function renderActiveDocument() {
     bgCanvas.style.height = viewport.height + 'px';
     drawCanvas.style.width = viewport.width + 'px';
     drawCanvas.style.height = viewport.height + 'px';
+    drawCanvas.dataset.renderedZoom = zoomLevel;
 
     // Double buffering: render PDF contents onto offscreen canvas first
     const offscreenCanvas = document.createElement('canvas');
@@ -1935,8 +1963,9 @@ function setupDrawingEvents(canvas, pageNum, doc) {
 
   const getPos = (e) => {
     const rect = canvas.getBoundingClientRect();
-    let rawX = (e.clientX - rect.left) / zoomLevel;
-    let rawY = (e.clientY - rect.top) / zoomLevel;
+    const canvasZoom = parseFloat(canvas.dataset.renderedZoom) || zoomLevel;
+    let rawX = (e.clientX - rect.left) / canvasZoom;
+    let rawY = (e.clientY - rect.top) / canvasZoom;
     let thickness = currentThickness;
     
     if (currentTool === 'highlighter') {
@@ -2361,13 +2390,10 @@ async function savePdf() {
     const pdfLibDoc = await PDFLib.PDFDocument.load(doc.bytes);
     const pages = pdfLibDoc.getPages();
 
-    const pageContainers = document.querySelectorAll('.page-container');
-    
-    for (const container of pageContainers) {
-      const pageNum = parseInt(container.dataset.page);
-      
+    for (let pageNum = 1; pageNum <= doc.pageCount; pageNum++) {
       if (doc.annotations[pageNum] && doc.annotations[pageNum].length > 0) {
         const page = pages[pageNum - 1];
+        if (!page) continue;
         const pageWidth = page.getWidth();
         const pageHeight = page.getHeight();
         
@@ -2905,8 +2931,9 @@ function keepElementInCanvasBounds(el, canvas, ann = null) {
   el.style.top = top + 'px';
 
   if (ann) {
-    ann.x = left / zoomLevel;
-    ann.y = (top / zoomLevel) + 10; // offset the Y shift of -10 PDF points
+    const canvasZoom = parseFloat(canvas.dataset.renderedZoom) || zoomLevel;
+    ann.x = left / canvasZoom;
+    ann.y = (top / canvasZoom) + 10; // offset the Y shift of -10 PDF points
   }
 }
 
@@ -2964,7 +2991,7 @@ function showTextFormattingPanel(ann, pageNum, canvas, input = null) {
   btnDec.title = 'Decrease Font Size';
   btnDec.addEventListener('click', (e) => {
     e.stopPropagation();
-    ann.fontSize = Math.max(8, ann.fontSize - 2);
+    ann.fontSize = Math.max(4, ann.fontSize - 2);
     sizeLabel.innerText = Math.round(ann.fontSize) + 'px';
     if (input) {
       applyTextStyleToInput(ann, input);

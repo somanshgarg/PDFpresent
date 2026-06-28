@@ -92,7 +92,14 @@ ipcMain.handle('dialog:saveFile', async (event, { defaultName, data }) => {
 
 // IPC: Direct Save (Overwrite)
 ipcMain.handle('fs:writeFile', async (event, { filePath, data }) => {
-  await fs.writeFile(filePath, Buffer.from(data));
+  const resolved = path.resolve(filePath);
+  const isPdf = resolved.toLowerCase().endsWith('.pdf');
+  
+  if (!isPdf) {
+    throw new Error('Access denied: target file must be a PDF document.');
+  }
+
+  await fs.writeFile(resolved, Buffer.from(data));
   return true;
 });
 
