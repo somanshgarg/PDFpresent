@@ -1741,25 +1741,36 @@ async function renderActiveDocument() {
     const viewport = page.getViewport({ scale: zoomLevel });
     const pixelRatio = window.devicePixelRatio || 1;
     
+    // Round CSS dimensions to exact integers to prevent sub-pixel misalignment
+    const cssWidth = Math.round(viewport.width);
+    const cssHeight = Math.round(viewport.height);
+    const backingWidth = Math.round(cssWidth * pixelRatio);
+    const backingHeight = Math.round(cssHeight * pixelRatio);
+
     // Immediately size CSS dimensions to scale existing canvas visual buffers (prevents white flicker!)
-    pageContainer.style.width = viewport.width + 'px';
-    pageContainer.style.height = viewport.height + 'px';
-    bgCanvas.style.width = viewport.width + 'px';
-    bgCanvas.style.height = viewport.height + 'px';
-    drawCanvas.style.width = viewport.width + 'px';
-    drawCanvas.style.height = viewport.height + 'px';
+    pageContainer.style.width = cssWidth + 'px';
+    pageContainer.style.height = cssHeight + 'px';
+    bgCanvas.style.width = cssWidth + 'px';
+    bgCanvas.style.height = cssHeight + 'px';
+    drawCanvas.style.width = cssWidth + 'px';
+    drawCanvas.style.height = cssHeight + 'px';
     drawCanvas.dataset.renderedZoom = zoomLevel;
 
     // Double buffering: render PDF contents onto offscreen canvas first
     const offscreenCanvas = document.createElement('canvas');
-    offscreenCanvas.width = viewport.width * pixelRatio;
-    offscreenCanvas.height = viewport.height * pixelRatio;
+    offscreenCanvas.width = backingWidth;
+    offscreenCanvas.height = backingHeight;
     const offCtx = offscreenCanvas.getContext('2d');
+    offCtx.imageSmoothingEnabled = true;
+    offCtx.imageSmoothingQuality = 'high';
+
+    const scaleX = backingWidth / viewport.width;
+    const scaleY = backingHeight / viewport.height;
 
     const renderContext = {
       canvasContext: offCtx,
       viewport: viewport,
-      transform: [pixelRatio, 0, 0, pixelRatio, 0, 0] // High DPI scale transform
+      transform: [scaleX, 0, 0, scaleY, 0, 0] // Exact High DPI scale transform
     };
     
     const renderTask = page.render(renderContext);
@@ -1770,14 +1781,16 @@ async function renderActiveDocument() {
     }
 
     // Draw offscreen canvas to main canvas once rendering is complete
-    bgCanvas.width = viewport.width * pixelRatio;
-    bgCanvas.height = viewport.height * pixelRatio;
+    bgCanvas.width = backingWidth;
+    bgCanvas.height = backingHeight;
     const bgCtx = bgCanvas.getContext('2d');
+    bgCtx.imageSmoothingEnabled = true;
+    bgCtx.imageSmoothingQuality = 'high';
     bgCtx.drawImage(offscreenCanvas, 0, 0);
 
     // Also update drawing canvas backing store
-    drawCanvas.width = viewport.width * pixelRatio;
-    drawCanvas.height = viewport.height * pixelRatio;
+    drawCanvas.width = backingWidth;
+    drawCanvas.height = backingHeight;
 
     // Render Text Layer
     textLayerDiv.innerHTML = '';
@@ -2247,10 +2260,20 @@ function redrawAnnotations(canvas, pageNum, doc, activePath = null, activeShape 
   const ctx = canvas.getContext('2d');
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  const drawScale = customScale !== null ? customScale : (zoomLevel * (window.devicePixelRatio || 1));
+  let drawScale = customScale;
+  if (drawScale === null) {
+    const cssWidth = canvas.style.width ? parseFloat(canvas.style.width) : (canvas.width / (window.devicePixelRatio || 1));
+    const currentZoom = parseFloat(canvas.dataset.renderedZoom) || zoomLevel;
+    // Calculate exact scale factor from raw PDF points to backing store pixels
+    drawScale = currentZoom * (canvas.width / cssWidth);
+  }
   
   // Set scale matrix to draw in raw 1.0 scale PDF Points
   ctx.setTransform(drawScale, 0, 0, drawScale, 0, 0);
+
+  // Set high quality context parameters
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
 
   const all = [...(doc.annotations[pageNum] || [])];
   if (activePath) all.push(activePath);
@@ -2268,11 +2291,27 @@ function redrawAnnotations(canvas, pageNum, doc, activePath = null, activeShape 
       ctx.lineJoin = 'round';
 
       if (ann.points.length > 0) {
-        ctx.moveTo(ann.points[0].x, ann.points[0].y);
-        for (let i = 1; i < ann.points.length; i++) {
-          ctx.lineTo(ann.points[i].x, ann.points[i].y);
+        if (ann.points.length === 1) {
+          // Draw a small solid circular dot for single-click inputs
+          ctx.fillStyle = ann.color;
+          ctx.arc(ann.points[0].x, ann.points[0].y, ann.thickness / 2, 0, Math.PI * 2);
+          ctx.fill();
+        } else if (ann.points.length === 2) {
+          ctx.moveTo(ann.points[0].x, ann.points[0].y);
+          ctx.lineTo(ann.points[1].x, ann.points[1].y);
+          ctx.stroke();
+        } else {
+          // Smooth curve using quadratic curve midpoint interpolation
+          ctx.moveTo(ann.points[0].x, ann.points[0].y);
+          let i;
+          for (i = 1; i < ann.points.length - 1; i++) {
+            const xc = (ann.points[i].x + ann.points[i + 1].x) / 2;
+            const yc = (ann.points[i].y + ann.points[i + 1].y) / 2;
+            ctx.quadraticCurveTo(ann.points[i].x, ann.points[i].y, xc, yc);
+          }
+          ctx.lineTo(ann.points[ann.points.length - 1].x, ann.points[ann.points.length - 1].y);
+          ctx.stroke();
         }
-        ctx.stroke();
       }
     } 
     else if (ann.type === 'text') {
@@ -2473,11 +2512,17 @@ function snapToNearestTextSpan(pageNum, x, y) {
   let nearestSpan = null;
   let minDistance = Infinity;
   
+  const containerRect = container.getBoundingClientRect();
+  const drawCanvas = container.querySelector('.drawing-canvas');
+  const pageZoom = drawCanvas ? (parseFloat(drawCanvas.dataset.renderedZoom) || zoomLevel) : zoomLevel;
+  
   spans.forEach(span => {
-    const spanX = span.offsetLeft / zoomLevel;
-    const spanY = span.offsetTop / zoomLevel;
-    const spanW = span.offsetWidth / zoomLevel;
-    const spanH = span.offsetHeight / zoomLevel;
+    const spanRect = span.getBoundingClientRect();
+    // Calculate coordinates relative to page container, then convert to raw PDF points using rendered pageZoom
+    const spanX = (spanRect.left - containerRect.left) / pageZoom;
+    const spanY = (spanRect.top - containerRect.top) / pageZoom;
+    const spanW = spanRect.width / pageZoom;
+    const spanH = spanRect.height / pageZoom;
     
     const centerY = spanY + spanH / 2;
     const vDist = Math.abs(y - centerY);
